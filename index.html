@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Nero Alerts</title>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  /* 16:9 stage that always fits the browser source, whatever size it is given */
+  #stage { position: fixed; inset: 0; display: grid; place-items: center; }
+  video { position: absolute; width: 100%; height: 100%; object-fit: contain; opacity: 0; pointer-events: none; }
+  video.on { opacity: 1; }
+  #dbg { position: fixed; left: 12px; bottom: 12px; font: 14px/1.4 ui-monospace, Menlo, monospace; color: #7dffa6;
+         background: rgba(0,0,0,.72); padding: 8px 10px; border-radius: 6px; white-space: pre; display: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <video id="v-skip" src="alerts/nero_skip.webm" preload="auto" playsinline></video>
+  <video id="v-superskip" src="alerts/nero_superskip.webm" preload="auto" playsinline></video>
+  <video id="v-throne" src="alerts/nero_throne.webm" preload="auto" playsinline></video>
+</div>
+<div id="dbg"></div>
+<script>
+/* Nero custom alerts.
+   Watches the live Nero queue (through a small read-only relay) and plays the matching clip
+   whenever a NEW skip, superskip or throne appears. Nothing to press.
+
+   URL options:
+     ?test=throne            play clips on load (comma list: skip,superskip,throne)
+     ?vol=0.8                volume 0..1 (default 1)
+     ?debug=1                show a small status readout
+     ?mock=1                 pretend a skip, superskip and throne arrive (tests the detection path)
+   Keys 1 / 2 / 3 play skip / superskip / throne when the page has focus. */
+const FEED = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-feed";
+const TIERS = ["skip", "superskip", "throne"];
+const qs = new URLSearchParams(location.search);
+const VOL = Math.max(0, Math.min(1, parseFloat(qs.get("vol") ?? "1")));
+const DEBUG = qs.has("debug"), MOCK = qs.has("mock");
+const vids = Object.fromEntries(TIERS.map(t => [t, document.getElementById("v-" + t)]));
+const dbg = document.getElementById("dbg"); if (DEBUG) dbg.style.display = "block";
+
+const state = { seeded: false, seen: new Set(), queue: [], playing: null, live: null, polls: 0, fired: 0, last: "", err: "" };
+const show = () => { if (DEBUG) dbg.textContent =
+  `live: ${state.live}   polls: ${state.polls}   known paid: ${state.seen.size}\n` +
+  `fired: ${state.fired}   queued: ${state.queue.length}   playing: ${state.playing ?? "-"}\n` +
+  `last: ${state.last || "-"}${state.err ? "\nerror: " + state.err : ""}`; };
+
+/* ---- playback: one clip at a time, in the order they arrived ---- */
+async function playNext() {
+  if (state.playing || !state.queue.length) return;
+  const job = state.queue.shift(), v = vids[job.tier];
+  state.playing = job.tier; state.fired++; state.last = `${job.tier} — ${job.name || "?"}`; show();
+  const done = () => { v.classList.remove("on"); v.pause(); state.playing = null; show(); setTimeout(playNext, 400); };
+  const guard = setTimeout(done, 13000);                 // never get stuck if a clip fails to end
+  v.onended = () => { clearTimeout(guard); done(); };
+  v.onerror = () => { clearTimeout(guard); state.err = "clip failed: " + job.tier; done(); };
+  try {
+    v.currentTime = 0; v.muted = false; v.volume = VOL; v.classList.add("on");
+    await v.play();
+  } catch (e) {                                          // ordinary browsers block sound without a click
+    try { v.muted = true; await v.play(); state.err = "sound blocked by this browser (fine in Streamlabs)"; }
+    catch (e2) { clearTimeout(guard); state.err = String(e2); done(); }
+  }
+  show();
+}
+function fire(tier, name) {
+  if (!vids[tier]) return;
+  if (state.queue.length < 20) state.queue.push({ tier, name });
+  playNext();
+}
+
+/* ---- detection: anything paid that was not there on the previous look is new ---- */
+const mockStart = Date.now();
+function withMock(feed) {
+  const t = (Date.now() - mockStart) / 1000, extra = [];
+  if (t > 6)  extra.push({ id: "mock-a", tier: "skip", name: "Mock Skip" });
+  if (t > 12) extra.push({ id: "mock-b", tier: "superskip", name: "Mock Superskip" });
+  if (t > 18) extra.push({ id: "mock-a", tier: "throne", name: "Mock Upgrade To Throne" });   // same person upgrading
+  return { ...feed, live: true, paid: [...(feed.paid || []), ...extra] };
+}
+function ingest(feed) {
+  state.live = !!feed.live;
+  if (!feed.live) return;
+  const fresh = [];
+  for (const p of feed.paid || []) {
+    const key = p.id + ":" + p.tier;
+    if (!state.seen.has(key)) { state.seen.add(key); fresh.push(p); }
+  }
+  if (!state.seeded) { state.seeded = true; return; }    // first look: learn what already exists, play nothing
+  fresh.sort((a, b) => TIERS.indexOf(a.tier) - TIERS.indexOf(b.tier));
+  for (const p of fresh) fire(p.tier, p.name);
+}
+async function poll() {
+  let delay = 2500;
+  try {
+    const r = await fetch(FEED + "?t=" + Date.now(), { cache: "no-store" });
+    let feed = await r.json();
+    if (MOCK) feed = withMock(feed);
+    state.polls++; state.err = feed.error ? String(feed.error) : state.err && state.err.startsWith("sound") ? state.err : "";
+    ingest(feed);
+    if (!feed.live) delay = 20000;                       // no session open: check rarely
+  } catch (e) { state.err = String(e); delay = 6000; }
+  show(); setTimeout(poll, delay);
+}
+
+/* ---- manual tests ---- */
+addEventListener("keydown", e => { const t = TIERS[+e.key - 1]; if (t) fire(t, "manual"); });
+(qs.get("test") || "").split(",").map(s => s.trim()).filter(Boolean).forEach(t => fire(t, "test"));
+window.neroAlerts = { fire, state };
+poll(); show();
+</script>
+</body>
+</html>

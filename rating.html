@@ -119,8 +119,18 @@ function fit() {
   let u;
   if (document.body.dataset.pos === "full") {
     // FULL SCREEN (default): the card fills the whole browser source, so you size and place it in Streamlabs.
-    if (!CARD_H) { root.setProperty("--u", "1px"); CARD_H = document.getElementById("card").offsetHeight; }
-    u = Math.min(w / (600 + 44), h / (CARD_H + 44)) * SCALE;       // small margin so the glow is not cut off
+    // Measure the card as it is actually drawn and correct until it fits with a margin on every side
+    // (a one-off estimate was a few pixels short, which clipped the top and bottom border).
+    const card = document.getElementById("card"), M = 30;            // margin in design units, each side
+    if (!CARD_H) { root.setProperty("--u", "1px"); CARD_H = card.offsetHeight; }
+    u = Math.min(w / (600 + 2 * M), h / (CARD_H + 2 * M));
+    for (let i = 0; i < 4; i++) {
+      root.setProperty("--u", u + "px");
+      const f = Math.min(w / (card.offsetWidth + 2 * M * u), h / (card.offsetHeight + 2 * M * u));
+      if (Math.abs(f - 1) < 0.002) break;
+      u *= f;
+    }
+    u *= SCALE;
   } else {
     // corner mode (?pos=bl|br|tl|tr|c): one unit = one pixel on a 1920x1080 canvas
     u = (w >= h ? Math.min(w / 1920, h / 1080) : w / 1080 * 1.5) * SCALE;

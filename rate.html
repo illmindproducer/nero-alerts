@@ -263,9 +263,10 @@ $("whSpin").onclick = async () => {
   whArmed = 0; whBusy = true; whLabel();
   const who = $("artist").value.trim() || "Unknown artist";
   try { const j = await wheelPost({ spin: { winner: who, song: $("song").value.trim(), song_id: S.songId || "" } });
-    whSay("Spinning… " + who + " is getting: " + j.spin.prize + (j.spin.rare ? "  (JACKPOT)" : ""), "var(--gold)"); }
-  // about a minute later, email the winner their claim link if they are in the Nero fan list (the admin page also does this whenever it is open)
-  setTimeout(() => fetch("https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-wheel-mail", { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ auto: true }) }).catch(() => {}), 60000);
+    whSay("Spinning… " + who + " is getting: " + j.spin.prize + (j.spin.rare ? "  (JACKPOT)" : ""), "var(--gold)");
+    // about a minute later, email the winner their claim link if they are in the Nero fan list (the admin page also does this whenever it is open)
+    setTimeout(() => fetch("https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-wheel-mail", { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ auto: true }) }).catch(() => {}), 60000);
+  }
   catch (e) { whSay("Spin failed: " + e.message, "var(--red)"); }
   setTimeout(() => { whBusy = false; whLabel(); }, 12000);
 };

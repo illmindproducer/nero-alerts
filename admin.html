@@ -135,6 +135,7 @@
     <div class="tiles" id="wTiles"></div>
     <h2>WINNERS</h2>
     <div class="filters" style="margin-top:0"><button class="btn on" data-wf="all">ALL</button><button class="btn" data-wf="todo">NEEDS YOU</button><button class="btn" data-wf="wait">WAITING ON WINNER</button><button class="btn" data-wf="done">DONE</button></div>
+    <p class="note" id="wMail" style="margin:10px 0 0"></p>
     <div id="wSpins"></div>
     <h2>PRIZES ON THE WHEEL</h2>
     <div class="card"><div id="wPrizes"></div>
@@ -176,6 +177,8 @@ const SITE = "https://illmindproducer.github.io/nero-alerts/";
 const CATS = [["drums", "DRUMS"], ["melody", "MELODY"], ["vocals", "VOCALS"], ["mix", "MIX"], ["originality", "ORIGINAL"]];
 const PADS = { fah: "FAHHH", airhorn: "AIR HORN", boom: "BOOM", bruh: "BRUH", trombone: "FAIL", crickets: "CRICKETS", scratch: "SCRATCH", rimshot: "BA-DUM-TSS", explosion: "BOMB", gunshots: "SHOTS", laugh: "LAUGH", applause: "APPLAUSE", oooh: "OOOOH", chaching: "CHA-CHING", buzzer: "WRONG", siren: "SIREN" };
 const WHEEL_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-wheel";
+const MAIL_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-wheel-mail";
+let MAIL = { ready: false, from: "", missing: [] };
 const KINDS = { physical: "Shipped item", digital: "Digital delivery", call: "Call / meeting", membership: "Membership", social: "Social shout", submission: "Free submission" };
 const TABS = [["ratings", "RATINGS"], ["board", "LEADERBOARD"], ["wheel", "PRIZE WHEEL"], ["pads", "SOUND PADS"], ["trooper", "TROOPER"], ["system", "SYSTEM"]];
 const colour = s => s >= 90 ? "var(--gold)" : s >= 75 ? "var(--green)" : s >= 60 ? "var(--orange)" : "var(--red)";
@@ -242,6 +245,7 @@ async function load() {
     $("live").textContent = "CAN'T LOAD: " + e.message.toUpperCase(); $("live").className = "pill err";
   }
   wheelApi("GET").then(j => { D.prizes = j.prizes; D.spins = j.spins; if (UI.tab === "wheel" && !document.activeElement.closest("#wSpins, #wPrizes")) DRAW.wheel(); }).catch(() => {});
+  fetch(MAIL_URL, { headers: { "x-rating-key": KEY }, cache: "no-store" }).then(r => r.json()).then(j => { if (j.ok) { MAIL = j; if (UI.tab === "wheel" && !document.activeElement.closest("#wSpins, #wPrizes")) DRAW.wheel(); } }).catch(() => {});
   fetch(BRAIN_URL, { headers: { "x-rating-key": KEY }, cache: "no-store" }).then(r => r.json()).then(j => { D.brain = j.ok ? j : null; if (UI.tab === "trooper") DRAW.trooper(); }).catch(() => {});
 }
 async function nero() {
@@ -308,6 +312,8 @@ const DRAW = {
     const stage = D.spins.map(s => spinStage(s)[0]);
     $("wTiles").innerHTML = tile("TOTAL SPINS", D.spins.length, "prizes given out") + tile("NEED YOU", stage.filter(x => x === "todo").length, "email or send a prize", "var(--amber)")
       + tile("WAITING ON WINNER", stage.filter(x => x === "wait").length, "emailed, no reply yet", "var(--cyan)") + tile("DONE", stage.filter(x => x === "done").length, "prize sent", "var(--green)");
+    $("wMail").innerHTML = MAIL.ready ? `<b style="color:var(--green)">AUTOMATIC EMAIL IS ON.</b> SEND EMAIL sends the claim email straight from <b>${esc(MAIL.from)}</b>.`
+      : `<b style="color:var(--amber)">AUTOMATIC EMAIL IS NOT SET UP YET</b> (missing ${esc((MAIL.missing || []).join(" and ") || "settings")}). Until then, EMAIL WINNER opens your own mail app with the message written.`;
     const rows = D.spins.filter(s => WF === "all" || spinStage(s)[0] === WF);
     $("wSpins").innerHTML = rows.length ? rows.map(s => { const [cls, txt] = spinStage(s), d = new Date(s.spun_at), c = s.claim;
       return `<div class="spin" data-id="${s.id}">
@@ -315,7 +321,7 @@ const DRAW = {
           <div class="pz"><b>${esc(s.prize_name)}</b><small>${esc(s.value_text)}${s.value_text ? " · " : ""}${esc(KINDS[s.prize_kind] || s.prize_kind)}</small></div></div>
         ${c ? `<div class="claim">${Object.entries(c).map(([k, v]) => `<span>${esc(k.replace(/_/g, " "))}:</span> ${esc(v)}`).join("<br>")}</div>` : ""}
         <div class="acts"><input type="email" placeholder="winner's email address" value="${esc(s.email)}"><button class="btn" data-a="email">SAVE EMAIL</button>
-          <button class="btn" data-a="mail">EMAIL WINNER</button><button class="btn" data-a="msg">COPY MESSAGE</button><button class="btn" data-a="link">COPY CLAIM LINK</button>${c ? `<button class="btn" data-a="details">COPY DETAILS</button>` : ""}</div>
+          <button class="btn${MAIL.ready ? " on" : ""}" data-a="mail">${MAIL.ready ? (s.emailed_at ? "SEND AGAIN" : "SEND EMAIL") : "EMAIL WINNER"}</button><button class="btn" data-a="msg">COPY MESSAGE</button><button class="btn" data-a="link">COPY CLAIM LINK</button>${c ? `<button class="btn" data-a="details">COPY DETAILS</button>` : ""}</div>
         <div class="acts"><input type="text" placeholder="private note" value="${esc(s.note)}"><button class="btn" data-a="note">SAVE NOTE</button>
           ${s.status === "won" ? `<button class="btn" data-a="st:emailed">MARK AS EMAILED</button>` : ""}${s.status === "fulfilled" ? `<button class="btn" data-a="st:${c ? "claimed" : "won"}">REOPEN</button>` : `<button class="btn on" data-a="st:fulfilled">MARK PRIZE SENT</button>`}
           <span style="flex:1"></span><button class="btn danger" data-a="del">DELETE</button></div></div>`; }).join("")
@@ -409,6 +415,12 @@ $("wSpins").onclick = async e => {
     else if (act.startsWith("st:")) await save({ status: act.slice(3) });
     else if (act === "mail") {
       if (!email) return alert("Add the winner's email address first.");
+      if (MAIL.ready) {                                       // sent by the server, from your own address
+        if (!confirm(`Send the claim email for "${s.prize_name}" to ${email}?`)) return;
+        e.target.disabled = true; e.target.textContent = "SENDING…";
+        const r = await fetch(MAIL_URL, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ send: { id, email } }) }), j = await r.json();
+        if (!j.ok) throw new Error(j.error || "failed"); Object.assign(s, j.spin); return DRAW.wheel();
+      }
       const m = winnerMessage(s); await save(s.status === "won" ? { email, status: "emailed" } : { email });
       location.href = "mailto:" + encodeURIComponent(email) + "?subject=" + encodeURIComponent(m.subject) + "&body=" + encodeURIComponent(m.body);
     } else if (act === "del") {

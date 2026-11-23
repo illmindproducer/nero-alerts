@@ -50,6 +50,19 @@
   .toggle { height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: #101a14; color: var(--ink); font: inherit; font-size: 13px; letter-spacing: .08em; cursor: pointer; }
   .toggle.sel { background: var(--gold); color: #1a1400; border-color: var(--gold); font-weight: 700; }
 
+  .sfx { margin-top: 14px; }
+  .sfx h2 { margin: 0 0 8px; display: flex; align-items: center; justify-content: space-between; font: 400 20px/1 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; letter-spacing: .08em; color: var(--green); }
+  .sfx h2 button { height: 30px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--red); background: transparent; color: var(--red); font: 12px/1 ui-monospace, Menlo, monospace; letter-spacing: .08em; cursor: pointer; }
+  .pads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+  .pad { aspect-ratio: 1 / 1; border-radius: 12px; border: 1px solid var(--line); background: linear-gradient(160deg, #14221a, #0b130e); color: var(--ink); cursor: pointer;
+         display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 2px; user-select: none; touch-action: manipulation; transition: transform .08s ease, background-color .15s ease, border-color .15s ease; }
+  .pad .e { font-size: clamp(22px, 7vw, 34px); line-height: 1; }
+  .pad .t { font: 400 clamp(10px, 3vw, 14px)/1 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; letter-spacing: .05em; text-align: center; }
+  .pad:active { transform: scale(.93); }
+  .pad.hit { background: var(--green); border-color: var(--green); color: #06110a; }
+  .pad.bad { background: var(--red); border-color: var(--red); }
+  .vol { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 12px; letter-spacing: .1em; color: var(--dim); }
+  .vol input { flex: 1; accent-color: var(--green); height: 28px; }
   .bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(180deg, rgba(6,10,7,0), #060a07 28%); }
   .bar .in { max-width: 732px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .live { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: center; gap: 10px; font-size: 12px; letter-spacing: .16em; color: var(--dim); }
@@ -91,8 +104,13 @@
       <div style="display:flex;gap:8px"><button class="mini" id="ovDn" style="width:52px;flex:none">−5</button><button class="mini" id="ovUp" style="width:52px;flex:none">+5</button><button class="mini" id="ovAuto" style="width:64px;flex:none">AUTO</button></div>
     </div>
   </div>
+  <div class="sfx">
+    <h2>SOUND EFFECTS <button id="sfxStop">STOP ALL</button></h2>
+    <div class="pads" id="pads"></div>
+    <div class="vol">SFX VOLUME <input type="range" id="sfxVol" min="0" max="100" value="100"> <span id="sfxVolN">100</span></div>
+  </div>
   <label class="hint" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="autonext" checked> When Nero moves to the next song, start a fresh rating automatically</label>
-  <div class="hint">Tap or drag across a bar to rate it. Changes go to the stream instantly while the card is showing. Keys on desktop: S show/hide, N next song.</div>
+  <div class="hint">Sound effects play on stream even when the rating card is hidden. Tap or drag across a bar to rate it. Changes go to the stream instantly while the card is showing. Keys on desktop: S show/hide, N next song.</div>
 </div>
 
 <div class="bar"><div class="in">
@@ -180,6 +198,27 @@ async function flush() {
   } catch (e) { status("OFFLINE", "err"); dirty = true; }
   sending = false; if (dirty) push();
 }
+
+/* ---- sound-effect pads: each press plays on the stream overlay, whether or not the rating card is showing ---- */
+const PADS = [["fah", "FAHHH", "😩"], ["airhorn", "AIR HORN", "📢"], ["boom", "BOOM", "💥"], ["bruh", "BRUH", "😐"],
+              ["trombone", "FAIL", "🎺"], ["crickets", "CRICKETS", "🦗"], ["rewind", "REWIND", "⏪"], ["rimshot", "BA-DUM-TSS", "🥁"],
+              ["explosion", "BOMB", "💣"], ["gunshots", "SHOTS", "🔫"], ["laugh", "LAUGH", "😂"], ["applause", "APPLAUSE", "👏"],
+              ["oooh", "OOOOH", "😮"], ["chaching", "CHA-CHING", "💰"], ["buzzer", "WRONG", "❌"], ["siren", "SIREN", "🚨"]];
+async function fireSfx(id, el) {
+  if (!KEY) return gate(true);
+  if (el) { el.classList.remove("bad"); el.classList.add("hit"); setTimeout(() => el.classList.remove("hit"), 260); }
+  try {
+    const r = await fetch(STATE_URL, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ sfx: { id, vol: (+$("sfxVol").value) / 100 } }) });
+    const j = await r.json(); if (!j.ok) throw new Error(j.error);
+  } catch (e) { if (el) { el.classList.add("bad"); setTimeout(() => el.classList.remove("bad"), 700); } status("SFX FAILED", "err"); }
+}
+for (const [id, label, emoji] of PADS) {
+  const b = document.createElement("button"); b.className = "pad"; b.innerHTML = `<span class="e">${emoji}</span><span class="t">${label}</span>`;
+  b.addEventListener("click", () => fireSfx(id, b)); $("pads").appendChild(b);
+}
+$("sfxStop").onclick = () => fireSfx("stop");
+try { $("sfxVol").value = localStorage.getItem("rating_sfxvol") || "100"; } catch (e) {} $("sfxVolN").textContent = $("sfxVol").value;
+$("sfxVol").oninput = e => { $("sfxVolN").textContent = e.target.value; try { localStorage.setItem("rating_sfxvol", e.target.value); } catch (x) {} };
 
 /* ---- controls ---- */
 $("show").onclick = () => { S.visible = !S.visible; paint(); push(); };

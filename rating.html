@@ -246,12 +246,31 @@ const FEED_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-fee
 let rev = -1, last = {}, neroId = null;
 const stale = () => !!(last.songId && neroId && neroId !== last.songId);
 const draw = () => render(Object.assign({}, last, { visible: !!last.visible && !stale() }));
+/* ---- sound effects: fired from the control page, played here so they go out on the stream.
+        They are independent of the rating card: they play whether the card is showing or hidden. ---- */
+const SFX_IDS = ["fah", "airhorn", "boom", "bruh", "trombone", "crickets", "rewind", "rimshot", "explosion", "gunshots", "laugh", "applause", "oooh", "chaching", "buzzer", "siren"];
+const sfxWarm = {}, sfxLive = new Set();
+SFX_IDS.forEach(id => { const a = new Audio("sfx/" + id + ".mp3"); a.preload = "auto"; sfxWarm[id] = a; });   // download up front
+function playSfx(ev) {
+  if (ev.id === "stop") { sfxLive.forEach(a => { try { a.pause(); } catch (e) {} }); sfxLive.clear(); return; }
+  if (!SFX_IDS.includes(ev.id)) return;
+  const a = new Audio("sfx/" + ev.id + ".mp3"); a.volume = Math.max(0, Math.min(1, ev.vol ?? 1));
+  sfxLive.add(a); a.onended = a.onerror = () => sfxLive.delete(a);
+  a.play().catch(() => sfxLive.delete(a));        // ordinary browsers block sound until clicked; Streamlabs does not
+}
+let sfxN = null;
 async function poll() {
+  let pause = 30;
   try {
-    const r = await fetch(STATE_URL + "?t=" + Date.now(), { cache: "no-store" }); const j = await r.json();
-    if (j.ok && j.rev !== rev) { rev = j.rev; last = j.state || {}; draw(); }
-  } catch (e) { /* keep showing the last state; try again */ }
-  setTimeout(poll, 800);
+    // long-poll: the server holds this request and answers the moment something changes
+    const url = STATE_URL + "?rev=" + rev + "&sfx=" + (sfxN ?? -1) + "&wait=" + (rev < 0 ? 0 : 20) + "&t=" + Date.now();
+    const j = await (await fetch(url, { cache: "no-store" })).json();
+    if (!j.ok) throw new Error(j.error || "bad reply");
+    if (j.rev !== rev) { rev = j.rev; last = j.state || {}; draw(); }
+    if (sfxN === null) sfxN = j.sfx_n;                       // first look: do not replay old presses
+    else if (j.sfx_n !== sfxN) { (j.sfx || []).filter(e => e.n > sfxN).forEach(playSfx); sfxN = j.sfx_n; }
+  } catch (e) { pause = 2000; }
+  setTimeout(poll, pause);
 }
 async function watchNero() {
   try {

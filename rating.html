@@ -146,13 +146,26 @@ function render(s) {
   $("stamp").classList.toggle("on", !!s.placement && !!s.visible);
 }
 
-let rev = -1;
+/* The card also watches Nero itself: the moment Nero moves to a different song than the one that was
+   rated, the card hides — even if the control page is closed or the phone is asleep. */
+const FEED_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-feed";
+let rev = -1, last = {}, neroId = null;
+const stale = () => !!(last.songId && neroId && neroId !== last.songId);
+const draw = () => render(Object.assign({}, last, { visible: !!last.visible && !stale() }));
 async function poll() {
   try {
     const r = await fetch(STATE_URL + "?t=" + Date.now(), { cache: "no-store" }); const j = await r.json();
-    if (j.ok && j.rev !== rev) { rev = j.rev; render(j.state || {}); }
+    if (j.ok && j.rev !== rev) { rev = j.rev; last = j.state || {}; draw(); }
   } catch (e) { /* keep showing the last state; try again */ }
   setTimeout(poll, 800);
+}
+async function watchNero() {
+  try {
+    const j = await (await fetch(FEED_URL + "?t=" + Date.now(), { cache: "no-store" })).json();
+    const id = j.live && j.current ? j.current.id : null;
+    if (id !== neroId) { neroId = id; draw(); }
+  } catch (e) {}
+  setTimeout(watchNero, 2500);
 }
 if (qs.has("demo")) {
   const demo = { visible: true, song: "Street Hits", artist: "Sample Artist", scores: { drums: null, melody: null, vocals: null, mix: null, originality: null }, overall: null };
@@ -160,7 +173,7 @@ if (qs.has("demo")) {
   const seq = [["drums", 85], ["melody", 92], ["vocals", "na"], ["mix", 70], ["originality", 55]];
   seq.forEach(([k, v], i) => setTimeout(() => { demo.scores[k] = v; const n = Object.values(demo.scores).filter(x => typeof x === "number");
     demo.overall = Math.round(n.reduce((a, b) => a + b, 0) / n.length); demo.placement = i === 4; render(demo); }, 1200 + i * 1100));
-} else poll();
+} else { poll(); watchNero(); }
 </script>
 </body>
 </html>

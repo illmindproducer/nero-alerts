@@ -179,6 +179,15 @@ const PADS = { fah: "FAHHH", airhorn: "AIR HORN", boom: "BOOM", bruh: "BRUH", tr
 const WHEEL_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-wheel";
 const MAIL_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-wheel-mail";
 let MAIL = { ready: false, from: "", missing: [] };
+const WHY = {};                                              // why a winner could not be emailed automatically, by spin id
+/* Email every winner who has not been emailed yet and can be found in the Nero fan list. Safe to call often. */
+async function autoMail() {
+  try { const j = await (await fetch(MAIL_URL, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ auto: true }) })).json();
+    if (!j.ok) return; let sent = false; for (const r of j.results || []) { if (r.sent) sent = true; else WHY[r.id] = r.why; }
+    if (sent) { const w = await wheelApi("GET"); D.prizes = w.prizes; D.spins = w.spins; }
+    if (UI.tab === "wheel" && !document.activeElement.closest("#wSpins, #wPrizes")) DRAW.wheel();
+  } catch (e) {}
+}
 const KINDS = { physical: "Shipped item", digital: "Digital delivery", call: "Call / meeting", membership: "Membership", social: "Social shout", submission: "Free submission" };
 const TABS = [["ratings", "RATINGS"], ["board", "LEADERBOARD"], ["wheel", "PRIZE WHEEL"], ["pads", "SOUND PADS"], ["trooper", "TROOPER"], ["system", "SYSTEM"]];
 const colour = s => s >= 90 ? "var(--gold)" : s >= 75 ? "var(--green)" : s >= 60 ? "var(--orange)" : "var(--red)";
@@ -244,7 +253,7 @@ async function load() {
     if (/bad key/.test(e.message)) { $("gate").style.display = "block"; $("app").style.display = "none"; }
     $("live").textContent = "CAN'T LOAD: " + e.message.toUpperCase(); $("live").className = "pill err";
   }
-  wheelApi("GET").then(j => { D.prizes = j.prizes; D.spins = j.spins; if (UI.tab === "wheel" && !document.activeElement.closest("#wSpins, #wPrizes")) DRAW.wheel(); }).catch(() => {});
+  wheelApi("GET").then(j => { D.prizes = j.prizes; D.spins = j.spins; if (UI.tab === "wheel" && !document.activeElement.closest("#wSpins, #wPrizes")) DRAW.wheel(); autoMail(); }).catch(() => {});
   fetch(MAIL_URL, { headers: { "x-rating-key": KEY }, cache: "no-store" }).then(r => r.json()).then(j => { if (j.ok) { MAIL = j; if (UI.tab === "wheel" && !document.activeElement.closest("#wSpins, #wPrizes")) DRAW.wheel(); } }).catch(() => {});
   fetch(BRAIN_URL, { headers: { "x-rating-key": KEY }, cache: "no-store" }).then(r => r.json()).then(j => { D.brain = j.ok ? j : null; if (UI.tab === "trooper") DRAW.trooper(); }).catch(() => {});
 }
@@ -312,12 +321,12 @@ const DRAW = {
     const stage = D.spins.map(s => spinStage(s)[0]);
     $("wTiles").innerHTML = tile("TOTAL SPINS", D.spins.length, "prizes given out") + tile("NEED YOU", stage.filter(x => x === "todo").length, "email or send a prize", "var(--amber)")
       + tile("WAITING ON WINNER", stage.filter(x => x === "wait").length, "emailed, no reply yet", "var(--cyan)") + tile("DONE", stage.filter(x => x === "done").length, "prize sent", "var(--green)");
-    $("wMail").innerHTML = MAIL.ready ? `<b style="color:var(--green)">AUTOMATIC EMAIL IS ON.</b> SEND EMAIL sends the claim email straight from <b>${esc(MAIL.from)}</b>.`
+    $("wMail").innerHTML = MAIL.ready ? `<b style="color:var(--green)">AUTOMATIC EMAIL IS ON.</b> A winner who is in your Nero fan list gets their claim email by itself, about a minute after the spin, from <b>${esc(MAIL.from)}</b>. Anyone not found there yet waits here until you add an address or Nero syncs them.`
       : `<b style="color:var(--amber)">AUTOMATIC EMAIL IS NOT SET UP YET</b> (missing ${esc((MAIL.missing || []).join(" and ") || "settings")}). Until then, EMAIL WINNER opens your own mail app with the message written.`;
     const rows = D.spins.filter(s => WF === "all" || spinStage(s)[0] === WF);
     $("wSpins").innerHTML = rows.length ? rows.map(s => { const [cls, txt] = spinStage(s), d = new Date(s.spun_at), c = s.claim;
       return `<div class="spin" data-id="${s.id}">
-        <div class="hd"><div class="who"><b>${esc(s.winner) || "(no name)"}</b><small>${esc(s.song)}${s.song ? " · " : ""}${esc(fmtDay(d))} ${esc(fmtTime(d))}</small><br><span class="st ${cls}">${txt}</span></div>
+        <div class="hd"><div class="who"><b>${esc(s.winner) || "(no name)"}</b><small>${esc(s.song)}${s.song ? " · " : ""}${esc(fmtDay(d))} ${esc(fmtTime(d))}</small><br><span class="st ${cls}">${txt}</span>${!s.email && s.status === "won" && WHY[s.id] ? `<br><small>${esc(WHY[s.id])}</small>` : ""}</div>
           <div class="pz"><b>${esc(s.prize_name)}</b><small>${esc(s.value_text)}${s.value_text ? " · " : ""}${esc(KINDS[s.prize_kind] || s.prize_kind)}</small></div></div>
         ${c ? `<div class="claim">${Object.entries(c).map(([k, v]) => `<span>${esc(k.replace(/_/g, " "))}:</span> ${esc(v)}`).join("<br>")}</div>` : ""}
         <div class="acts"><input type="email" placeholder="winner's email address" value="${esc(s.email)}"><button class="btn" data-a="email">SAVE EMAIL</button>

@@ -73,6 +73,22 @@
   .lnk { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); } .lnk:first-of-type { border-top: 0; }
   .lnk code { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; } .lnk small { color: var(--dim); display: block; font-size: 11px; }
   .note { color: var(--dim); line-height: 1.6; } .note b { color: var(--ink); font-weight: 400; }
+  .spin { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-top: 10px; }
+  .spin .hd { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+  .spin .who b { display: block; font: 400 19px/1.15 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; letter-spacing: .02em; }
+  .spin .who small, .spin .pz small { color: var(--dim); font-size: 11px; letter-spacing: .06em; }
+  .spin .pz { text-align: right; } .spin .pz b { display: block; font-weight: 400; color: var(--gold); font-size: 14px; }
+  .st { display: inline-block; font-size: 10px; letter-spacing: .12em; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); margin-top: 6px; }
+  .st.todo { color: #06110a; background: var(--amber); border-color: var(--amber); } .st.wait { color: var(--cyan); border-color: var(--cyan); } .st.done { color: var(--green); border-color: var(--green); }
+  .spin .acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  .spin input[type=email], .spin input[type=text] { height: 32px; border-radius: 8px; border: 1px solid var(--line); background: #070c09; padding: 0 10px; outline: 0; min-width: 0; }
+  .spin input[type=email] { flex: 1 1 220px; } .spin input[type=text] { flex: 1 1 100%; }
+  .claim { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: #070c09; border: 1px dashed var(--line); line-height: 1.7; } .claim span { color: var(--dim); }
+  .pzrow { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1fr) 70px 58px 122px 26px auto auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+  .pzrow.head { border-top: 0; color: var(--dim); font-size: 11px; letter-spacing: .1em; }
+  .pzrow input[type=text], .pzrow input[type=number], .pzrow select { height: 32px; width: 100%; border-radius: 8px; border: 1px solid var(--line); background: #070c09; padding: 0 8px; outline: 0; min-width: 0; }
+  .pzrow .odds { text-align: right; color: var(--gold); }
+  @media (max-width: 820px) { .pzrow { grid-template-columns: 1fr 1fr; } .pzrow.head { display: none; } .spin .pz { text-align: left; } }
   #gate { display: none; margin-top: 30px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
   #gate input { width: 100%; height: 38px; margin-top: 8px; border-radius: 8px; border: 1px solid var(--line); background: #070c09; padding: 0 10px; outline: 0; }
   @media (max-width: 820px) {
@@ -115,6 +131,16 @@
     </div>
   </div>
 
+  <div class="view" data-v="wheel">
+    <div class="tiles" id="wTiles"></div>
+    <h2>WINNERS</h2>
+    <div class="filters" style="margin-top:0"><button class="btn on" data-wf="all">ALL</button><button class="btn" data-wf="todo">NEEDS YOU</button><button class="btn" data-wf="wait">WAITING ON WINNER</button><button class="btn" data-wf="done">DONE</button></div>
+    <div id="wSpins"></div>
+    <h2>PRIZES ON THE WHEEL</h2>
+    <div class="card"><div id="wPrizes"></div>
+      <p class="note">The <b>chance</b> number sets how likely a prize is compared with the others: a prize with 30 comes up ten times as often as one with 3. Odds are worked out across the prizes that are switched on. Every slice on the wheel is drawn the same size whatever its odds.</p></div>
+  </div>
+
   <div class="view" data-v="pads">
     <div class="filters"><select id="pStream" aria-label="Stream"></select></div>
     <div class="tiles" id="pTiles"></div>
@@ -149,7 +175,9 @@ const BRAIN_URL = "https://xosofmhvgnxschaitgnb.supabase.co/functions/v1/buddy-b
 const SITE = "https://illmindproducer.github.io/nero-alerts/";
 const CATS = [["drums", "DRUMS"], ["melody", "MELODY"], ["vocals", "VOCALS"], ["mix", "MIX"], ["originality", "ORIGINAL"]];
 const PADS = { fah: "FAHHH", airhorn: "AIR HORN", boom: "BOOM", bruh: "BRUH", trombone: "FAIL", crickets: "CRICKETS", scratch: "SCRATCH", rimshot: "BA-DUM-TSS", explosion: "BOMB", gunshots: "SHOTS", laugh: "LAUGH", applause: "APPLAUSE", oooh: "OOOOH", chaching: "CHA-CHING", buzzer: "WRONG", siren: "SIREN" };
-const TABS = [["ratings", "RATINGS"], ["board", "LEADERBOARD"], ["pads", "SOUND PADS"], ["trooper", "TROOPER"], ["system", "SYSTEM"]];
+const WHEEL_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-wheel";
+const KINDS = { physical: "Shipped item", digital: "Digital delivery", call: "Call / meeting", membership: "Membership", social: "Social shout", submission: "Free submission" };
+const TABS = [["ratings", "RATINGS"], ["board", "LEADERBOARD"], ["wheel", "PRIZE WHEEL"], ["pads", "SOUND PADS"], ["trooper", "TROOPER"], ["system", "SYSTEM"]];
 const colour = s => s >= 90 ? "var(--gold)" : s >= 75 ? "var(--green)" : s >= 60 ? "var(--orange)" : "var(--red)";
 const tierName = s => s >= 90 ? "ELITE" : s >= 75 ? "STRONG" : s >= 60 ? "GETTING THERE" : "KEEP WORKING";
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));   // names come from the public: always escape
@@ -160,7 +188,8 @@ const avg = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) 
 
 let KEY = "";
 try { const m = location.hash.match(/k=([^&]+)/); if (m) { KEY = decodeURIComponent(m[1]); localStorage.setItem("rating_key", KEY); history.replaceState(null, "", location.pathname); } else KEY = localStorage.getItem("rating_key") || ""; } catch (e) {}
-const D = { ratings: [], sfx: [], buddy: [], now: null, brain: null, streams: [] };
+const D = { ratings: [], sfx: [], buddy: [], now: null, brain: null, streams: [], prizes: [], spins: [] };
+let WF = "all";
 const UI = { tab: "ratings", stream: "all", search: "", place: false, sort: "time", dir: -1, open: null };
 try { UI.tab = localStorage.getItem("admin_tab") || "ratings"; } catch (e) {}
 if (!TABS.some(t => t[0] === UI.tab)) UI.tab = "ratings";
@@ -184,6 +213,24 @@ async function api(method, body) {
   const r = await fetch(ADMIN_URL, { method, headers: { "content-type": "application/json", "x-rating-key": KEY }, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
   const j = await r.json(); if (!j.ok) throw new Error(j.error || "failed"); return j;
 }
+async function wheelApi(method, body) {
+  const r = await fetch(WHEEL_URL + (method === "GET" ? "?admin=1" : ""), { method, headers: { "content-type": "application/json", "x-rating-key": KEY }, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+  const j = await r.json(); if (!j.ok) throw new Error(j.error || "failed"); return j;
+}
+/* where a winner stands, in plain words */
+function spinStage(s) {
+  if (s.status === "fulfilled") return ["done", "DONE · PRIZE SENT"];
+  if (s.status === "claimed") return ["todo", "DETAILS IN · SEND THE PRIZE"];
+  if (s.status === "emailed") return ["wait", "EMAILED · WAITING ON WINNER"];
+  return s.email ? ["todo", "READY TO EMAIL"] : ["todo", "NEEDS AN EMAIL ADDRESS"];
+}
+const claimLink = s => SITE + "claim.html?t=" + encodeURIComponent(s.claim_token);
+function winnerMessage(s) {
+  const ask = { physical: "It asks for your mailing address so I can ship it out.", digital: "It asks where to send it.", call: "It asks for your time zone and when you're free.",
+    membership: "It asks which email to set your membership up under.", social: "It asks for your Instagram handle.", submission: "It asks for your Nero account email so the free submission gets applied to you." }[s.prize_kind] || "";
+  return { subject: "You won on illmind's stream: " + s.prize_name,
+    body: `Yo ${s.winner || "there"},\n\nCongrats! You won ${s.prize_name} on my stream${s.song ? ` for your track "${s.song}"` : ""}.\n\nTo claim it, fill out this quick form (takes a minute):\n${claimLink(s)}\n\n${ask}\n\nMuch love,\n!llmind` };
+}
 async function load() {
   if (!KEY) { $("gate").style.display = "block"; return; }
   try {
@@ -194,6 +241,7 @@ async function load() {
     if (/bad key/.test(e.message)) { $("gate").style.display = "block"; $("app").style.display = "none"; }
     $("live").textContent = "CAN'T LOAD: " + e.message.toUpperCase(); $("live").className = "pill err";
   }
+  wheelApi("GET").then(j => { D.prizes = j.prizes; D.spins = j.spins; if (UI.tab === "wheel" && !document.activeElement.closest("#wSpins, #wPrizes")) DRAW.wheel(); }).catch(() => {});
   fetch(BRAIN_URL, { headers: { "x-rating-key": KEY }, cache: "no-store" }).then(r => r.json()).then(j => { D.brain = j.ok ? j : null; if (UI.tab === "trooper") DRAW.trooper(); }).catch(() => {});
 }
 async function nero() {
@@ -256,6 +304,31 @@ const DRAW = {
     $("bCats").innerHTML = CATS.map(([k, label]) => { const b = D.ratings.filter(r => num(r.scores?.[k])).sort((x, y) => y.scores[k] - x.scores[k])[0];
       return b ? hb(label, esc(b.song) + " — " + esc(b.artist), b.scores[k], 100, colour(b.scores[k]), `${label}: ${b.song} — ${b.artist}, ${b.scores[k]}`) : hb(label, "none yet", 0, 100, "var(--line)", label); }).join("");
   },
+  wheel() {
+    const stage = D.spins.map(s => spinStage(s)[0]);
+    $("wTiles").innerHTML = tile("TOTAL SPINS", D.spins.length, "prizes given out") + tile("NEED YOU", stage.filter(x => x === "todo").length, "email or send a prize", "var(--amber)")
+      + tile("WAITING ON WINNER", stage.filter(x => x === "wait").length, "emailed, no reply yet", "var(--cyan)") + tile("DONE", stage.filter(x => x === "done").length, "prize sent", "var(--green)");
+    const rows = D.spins.filter(s => WF === "all" || spinStage(s)[0] === WF);
+    $("wSpins").innerHTML = rows.length ? rows.map(s => { const [cls, txt] = spinStage(s), d = new Date(s.spun_at), c = s.claim;
+      return `<div class="spin" data-id="${s.id}">
+        <div class="hd"><div class="who"><b>${esc(s.winner) || "(no name)"}</b><small>${esc(s.song)}${s.song ? " · " : ""}${esc(fmtDay(d))} ${esc(fmtTime(d))}</small><br><span class="st ${cls}">${txt}</span></div>
+          <div class="pz"><b>${esc(s.prize_name)}</b><small>${esc(s.value_text)}${s.value_text ? " · " : ""}${esc(KINDS[s.prize_kind] || s.prize_kind)}</small></div></div>
+        ${c ? `<div class="claim">${Object.entries(c).map(([k, v]) => `<span>${esc(k.replace(/_/g, " "))}:</span> ${esc(v)}`).join("<br>")}</div>` : ""}
+        <div class="acts"><input type="email" placeholder="winner's email address" value="${esc(s.email)}"><button class="btn" data-a="email">SAVE EMAIL</button>
+          <button class="btn" data-a="mail">EMAIL WINNER</button><button class="btn" data-a="msg">COPY MESSAGE</button><button class="btn" data-a="link">COPY CLAIM LINK</button>${c ? `<button class="btn" data-a="details">COPY DETAILS</button>` : ""}</div>
+        <div class="acts"><input type="text" placeholder="private note" value="${esc(s.note)}"><button class="btn" data-a="note">SAVE NOTE</button>
+          ${s.status === "won" ? `<button class="btn" data-a="st:emailed">MARK AS EMAILED</button>` : ""}${s.status === "fulfilled" ? `<button class="btn" data-a="st:${c ? "claimed" : "won"}">REOPEN</button>` : `<button class="btn on" data-a="st:fulfilled">MARK PRIZE SENT</button>`}
+          <span style="flex:1"></span><button class="btn danger" data-a="del">DELETE</button></div></div>`; }).join("")
+      : `<div class="empty">${D.spins.length ? "Nobody in this group." : "No spins yet. Every spin of the wheel is saved here with the winner and the prize."}</div>`;
+    const total = D.prizes.filter(p => p.active).reduce((a, p) => a + Number(p.weight), 0);
+    const kindSel = v => `<select data-f="kind">${Object.entries(KINDS).map(([k, l]) => `<option value="${k}"${k === v ? " selected" : ""}>${l}</option>`).join("")}</select>`;
+    const prow = p => `<div class="pzrow" data-pid="${p.id || ""}"><input type="text" data-f="name" value="${esc(p.name)}" placeholder="Prize (full name)"><input type="text" data-f="label" value="${esc(p.label)}" placeholder="Short name on wheel" maxlength="40">
+      <input type="text" data-f="value_text" value="${esc(p.value_text)}" placeholder="$50 value"><input type="number" data-f="weight" value="${p.weight}" min="0" step="0.1" title="Chance">
+      <div class="odds" title="Chance of landing on this prize">${p.id ? (p.active && total ? (Number(p.weight) / total * 100).toFixed(Number(p.weight) / total < 0.1 ? 1 : 0) + "%" : "off") : ""}</div>${kindSel(p.kind)}
+      <input type="checkbox" data-f="active" ${p.active ? "checked" : ""} title="On the wheel"><button class="btn" data-a="psave">${p.id ? "SAVE" : "ADD"}</button>${p.id ? `<button class="btn danger" data-a="pdel">✕</button>` : "<span></span>"}</div>`;
+    $("wPrizes").innerHTML = `<div class="pzrow head"><span>PRIZE</span><span>NAME ON WHEEL</span><span>VALUE</span><span>CHANCE</span><span style="text-align:right">ODDS</span><span>HOW IT'S DELIVERED</span><span>ON</span><span></span><span></span></div>`
+      + D.prizes.map(prow).join("") + prow({ name: "", label: "", value_text: "", weight: 10, kind: "digital", active: true });
+  },
   pads() {
     const ev = D.sfx.filter(e => inStream(e.at, UI.stream)), n = {}; ev.forEach(e => n[e.id] = (n[e.id] || 0) + 1);
     const list = Object.keys(PADS).map(id => [id, n[id] || 0]).sort((a, b) => b[1] - a[1]), max = Math.max(1, ...list.map(x => x[1])), fav = list[0];
@@ -281,7 +354,7 @@ const DRAW = {
   },
   system() {
     const links = [["Alerts", "index.html", "Skip, Superskip and Throne clips"], ["Rating card + sound pads", "rating.html", "Also draws the pad graphics"], ["Trooper", "buddy.html", "The talking head"],
-      ["Pad graphics only", "fx.html", "Optional. Add ?fx=0 to the rating link if you use it"], ["Control page", "rate.html#k=" + encodeURIComponent(KEY), "PRIVATE: contains your key"], ["This dashboard", "admin.html#k=" + encodeURIComponent(KEY), "PRIVATE: contains your key"]];
+      ["Prize wheel", "wheel.html", "Its own full-screen source, set to Monitor and Output"], ["Pad graphics only", "fx.html", "Optional. Add ?fx=0 to the rating link if you use it"], ["Control page", "rate.html#k=" + encodeURIComponent(KEY), "PRIVATE: contains your key"], ["This dashboard", "admin.html#k=" + encodeURIComponent(KEY), "PRIVATE: contains your key"]];
     $("sLinks").innerHTML = links.map(([n, p, s], i) => `<div class="lnk"><div>${n}<small>${s}</small></div><code>${esc(SITE + p.replace(/#k=.*/, "#k=••••••"))}</code><button class="btn" data-copy="${i}">COPY</button></div>`).join("");
     $("sLinks").onclick = e => { const i = e.target.dataset.copy; if (i === undefined) return; navigator.clipboard.writeText(SITE + links[i][1]).then(() => { e.target.textContent = "COPIED"; setTimeout(() => e.target.textContent = "COPY", 1200); }); };
     const n = D.now || {};
@@ -320,6 +393,43 @@ $("rTable").onclick = async e => {
     draw();
   } catch (x) { alert("That didn't save: " + x.message); }
 };
+/* ---- prize wheel tab ---- */
+document.querySelector('[data-v="wheel"] .filters').onclick = e => { const f = e.target.dataset.wf; if (!f) return; WF = f; e.currentTarget.querySelectorAll(".btn").forEach(b => b.classList.toggle("on", b.dataset.wf === f)); DRAW.wheel(); };
+const copy = (text, btn) => navigator.clipboard.writeText(text).then(() => { const t = btn.textContent; btn.textContent = "COPIED"; setTimeout(() => btn.textContent = t, 1200); });
+$("wSpins").onclick = async e => {
+  const act = e.target.dataset.a, card = e.target.closest(".spin"); if (!act || !card) return;
+  const id = +card.dataset.id, s = D.spins.find(x => x.id === id), email = card.querySelector("input[type=email]").value.trim();
+  const save = async set => { const j = await wheelApi("POST", { spin_update: Object.assign({ id }, set) }); Object.assign(s, j.spin); };
+  try {
+    if (act === "link") return copy(claimLink(s), e.target);
+    if (act === "msg") { const m = winnerMessage(s); return copy(m.subject + "\n\n" + m.body, e.target); }
+    if (act === "details") return copy(`${s.winner} · ${s.prize_name}\n` + Object.entries(s.claim || {}).map(([k, v]) => k.replace(/_/g, " ") + ": " + v).join("\n"), e.target);
+    if (act === "email") await save({ email });
+    else if (act === "note") await save({ note: card.querySelector("input[type=text]").value });
+    else if (act.startsWith("st:")) await save({ status: act.slice(3) });
+    else if (act === "mail") {
+      if (!email) return alert("Add the winner's email address first.");
+      const m = winnerMessage(s); await save(s.status === "won" ? { email, status: "emailed" } : { email });
+      location.href = "mailto:" + encodeURIComponent(email) + "?subject=" + encodeURIComponent(m.subject) + "&body=" + encodeURIComponent(m.body);
+    } else if (act === "del") {
+      if (!confirm(`Delete ${s.winner}'s win (${s.prize_name})?\nTheir claim link will stop working. This cannot be undone.`)) return;
+      await wheelApi("POST", { spin_remove: { id } }); D.spins = D.spins.filter(x => x.id !== id);
+    }
+    DRAW.wheel();
+  } catch (x) { alert("That didn't save: " + x.message); }
+};
+$("wPrizes").onclick = async e => {
+  const act = e.target.dataset.a, row = e.target.closest(".pzrow"); if (!act || !row) return;
+  const id = +row.dataset.pid || null, get = f => row.querySelector(`[data-f="${f}"]`);
+  try {
+    if (act === "pdel") { const p = D.prizes.find(x => x.id === id); if (!confirm(`Remove "${p.name}" from the wheel for good?\nPast winners of it stay in the list.`)) return;
+      await wheelApi("POST", { prize_remove: { id } }); D.prizes = D.prizes.filter(x => x.id !== id); }
+    else { const body = { name: get("name").value, label: get("label").value, value_text: get("value_text").value, weight: +get("weight").value, kind: get("kind").value, active: get("active").checked };
+      if (!body.name.trim()) return alert("Give the prize a name first."); if (id) body.id = id; else body.sort = D.prizes.length + 1;
+      const j = await wheelApi("POST", { prize: body }); const i = D.prizes.findIndex(x => x.id === j.prize.id); if (i >= 0) D.prizes[i] = j.prize; else D.prizes.push(j.prize); }
+    DRAW.wheel();
+  } catch (x) { alert("That didn't save: " + x.message); }
+};
 $("csv").onclick = () => {
   const q = v => '"' + String(v ?? "").replace(/"/g, '""') + '"';
   const lines = [["date", "time", "song", "artist", ...CATS.map(c => c[0]), "overall", "tier", "placement_ready", "note"].join(",")];
@@ -328,7 +438,7 @@ $("csv").onclick = () => {
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })); a.download = "stream-ratings.csv"; a.click(); URL.revokeObjectURL(a.href);
 };
 /* keep it fresh while it is open, but never redraw under an open editor */
-setInterval(() => { if (document.hidden || UI.open !== null || document.activeElement === $("fSearch")) return; load(); }, 30000);
+setInterval(() => { if (document.hidden || UI.open !== null || ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return; load(); }, 30000);
 setInterval(nero, 15000);
 load(); nero();
 </script>

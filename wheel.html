@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Prize Wheel</title>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; }
+  :root { --S: min(74vh, 62vw); }
+  #dim { position: fixed; inset: 0; opacity: 0; background: radial-gradient(ellipse at 50% 48%, rgba(40,10,60,.72), rgba(0,0,0,.86) 70%); transition: opacity .5s ease; }
+  #flash { position: fixed; inset: 0; opacity: 0; background: #ffe27a; pointer-events: none; }
+  #stage { position: fixed; inset: 0; display: grid; place-items: center; opacity: 0; transform: scale(.25) rotate(-25deg); will-change: transform, opacity; }
+  #rig { position: relative; width: var(--S); height: var(--S); margin-top: 4vh; }
+  #glow { position: absolute; inset: -22%; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,205,60,.55), rgba(255,120,0,.22) 55%, rgba(255,120,0,0) 72%); animation: breathe 1.6s ease-in-out infinite alternate; }
+  @keyframes breathe { from { opacity: .55; transform: scale(.96); } to { opacity: 1; transform: scale(1.04); } }
+  #rim { position: absolute; inset: -5.5%; border-radius: 50%;
+         background: conic-gradient(from 20deg, #fff6c2, #e2a400, #7a4b00, #ffd95a, #fff6c2, #c98a00, #6b4000, #ffe488, #fff6c2);
+         box-shadow: 0 0 0 calc(var(--S) * .006) #3a2300, 0 calc(var(--S) * .02) calc(var(--S) * .06) rgba(0,0,0,.7), inset 0 0 calc(var(--S) * .03) rgba(0,0,0,.55); }
+  .bulb { position: absolute; left: 50%; top: 50%; width: calc(var(--S) * .03); height: calc(var(--S) * .03); margin: calc(var(--S) * -.015); border-radius: 50%;
+          background: radial-gradient(circle at 35% 30%, #fff, #fff2a8 35%, #ffb300 70%); opacity: .25; animation: chase 1.1s linear infinite; }
+  .bulb::after { content: ""; position: absolute; inset: -90%; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,230,120,.75), rgba(255,200,60,0)); }
+  @keyframes chase { 0%, 30% { opacity: 1; } 45%, 100% { opacity: .22; } }
+  body.spin .bulb { animation-duration: .36s; }
+  body.won .bulb { animation: strobe .22s steps(1, end) infinite; }
+  @keyframes strobe { 0% { opacity: 1; } 50% { opacity: .2; } }
+  #turn { position: absolute; inset: 0; border-radius: 50%; will-change: transform; }
+  #turn canvas { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; }
+  #mask { opacity: 0; }
+  body.won #mask { animation: maskblink .5s steps(1, end) infinite; }
+  @keyframes maskblink { 0% { opacity: 1; } 50% { opacity: .35; } }
+  #hub { position: absolute; left: 50%; top: 50%; width: 19%; height: 19%; transform: translate(-50%, -50%); border-radius: 50%; display: grid; place-items: center;
+         background: radial-gradient(circle at 35% 28%, #fffbe0, #ffd34d 30%, #c98a00 62%, #5c3600); box-shadow: 0 0 0 calc(var(--S) * .008) #3a2300, 0 calc(var(--S) * .01) calc(var(--S) * .03) rgba(0,0,0,.7);
+         color: #3a2300; font-size: calc(var(--S) * .1); line-height: 1; }
+  #pointer { position: absolute; left: 50%; top: -9.5%; width: 11%; height: 15%; margin-left: -5.5%; transform-origin: 50% 18%; will-change: transform; filter: drop-shadow(0 calc(var(--S) * .008) calc(var(--S) * .012) rgba(0,0,0,.7)); }
+  #pointer i { position: absolute; inset: 0; clip-path: polygon(50% 100%, 4% 22%, 22% 0, 78% 0, 96% 22%); background: linear-gradient(180deg, #fff6c2, #ffcf3d 40%, #b87900); }
+  #pointer b { position: absolute; left: 50%; top: 9%; width: 30%; aspect-ratio: 1; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ffd0d0, #ff1f45 45%, #7d0018); }
+  #title { position: fixed; left: 0; right: 0; top: 2.2vh; text-align: center; font-size: min(8.5vh, 8vw); letter-spacing: .08em; color: #ffe27a; -webkit-text-stroke: .05em #4a2c00; paint-order: stroke fill;
+           text-shadow: 0 .05em 0 #7a4b00, 0 .1em .3em rgba(0,0,0,.8); }
+  #who { position: fixed; left: 0; right: 0; bottom: 2.4vh; text-align: center; font-size: min(5.6vh, 5vw); letter-spacing: .05em; color: #fff; -webkit-text-stroke: .08em #000; paint-order: stroke fill; opacity: 0; transition: opacity .3s ease; }
+  #who b { font-weight: 400; color: #39ff6a; }
+  #win { position: fixed; left: 50%; top: 50%; width: min(86vw, 150vh); transform: translate(-50%, -50%) scale(.2); opacity: 0; text-align: center; will-change: transform, opacity; pointer-events: none;
+         padding: 3vh 3vw 3.4vh; border-radius: 2.4vh; border: .5vh solid #ffd34d; background: linear-gradient(180deg, rgba(40,8,60,.96), rgba(8,4,20,.97));
+         box-shadow: 0 0 0 .3vh #5c3600, 0 2vh 8vh rgba(0,0,0,.8), inset 0 0 6vh rgba(255,200,60,.22); }
+  #win .k { font-size: min(5vh, 4.4vw); letter-spacing: .22em; color: #ffe27a; }
+  #win .name { font-size: min(9.5vh, 8vw); line-height: 1.05; color: #fff; margin-top: .6vh; overflow-wrap: anywhere; -webkit-text-stroke: .04em #000; paint-order: stroke fill; }
+  #win .wins { font-size: min(4vh, 3.6vw); letter-spacing: .3em; color: #b9a2d8; margin-top: 1vh; }
+  #win .prize { font-size: min(11vh, 9.4vw); line-height: 1.04; margin-top: .6vh; color: #ffd34d; -webkit-text-stroke: .035em #4a2c00; paint-order: stroke fill; text-shadow: 0 .05em 0 #7a4b00; }
+  #win .val { font-size: min(5vh, 4.4vw); letter-spacing: .1em; color: #39ff6a; margin-top: 1vh; }
+  body.rare #win { border-color: #fff; background: linear-gradient(180deg, rgba(120,70,0,.97), rgba(30,14,0,.98)); }
+  #confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #dbg { position: fixed; left: 8px; bottom: 8px; font: 12px ui-monospace, Menlo, monospace; color: #7dffa6; background: rgba(0,0,0,.7); padding: 6px 8px; border-radius: 6px; display: none; white-space: pre; }
+</style>
+</head>
+<body>
+<div id="dim"></div>
+<div id="stage">
+  <div id="rig">
+    <div id="glow"></div>
+    <div id="rim"></div>
+    <div id="turn"><canvas id="wheel" width="1200" height="1200"></canvas><canvas id="mask" width="600" height="600"></canvas></div>
+    <div id="hub">★</div>
+    <div id="pointer"><i></i><b></b></div>
+  </div>
+</div>
+<div id="title" style="opacity:0">PRIZE WHEEL</div>
+<div id="who">SPINNING FOR <b id="whoName"></b></div>
+<div id="flash"></div>
+<canvas id="confetti"></canvas>
+<div id="win"><div class="k" id="winK">WINNER</div><div class="name" id="winName"></div><div class="wins">WINS</div><div class="prize" id="winPrize"></div><div class="val" id="winVal"></div></div>
+<div id="dbg"></div>
+<script>
+/* Prize wheel overlay. The control page sends show / spin / hide; the prize is picked by the server BEFORE the wheel
+   moves, and the wheel is then steered to land on it. All the sound is made here in code, plus a few of the pad sounds.
+   ?demo=1 runs sample spins on a loop (no server)   ?demo=rare shows the jackpot version   ?vol=0..1.5   ?debug=1 */
+const qs = new URLSearchParams(location.search), $ = id => document.getElementById(id);
+const WHEEL_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-wheel";
+const VOL = Math.max(0, Math.min(1.5, parseFloat(qs.get("vol") || "0.8") || 0.8));
+const COLORS = ["#e5173f", "#1e5bff", "#00a85f", "#8a2be2", "#ff7a00", "#00b3c4", "#d81b9a"];
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const R = (a, b) => a + Math.random() * (b - a);
+if (qs.has("debug")) $("dbg").style.display = "block";
+
+/* ---------------- drawing the wheel ---------------- */
+let prizes = [], slices = [], seg = 60, angle = 0, shown = false, busy = false, hideTimer = null, runId = 0;
+function setPrizes(list) {
+  if (JSON.stringify(list) === JSON.stringify(prizes) || busy) return;
+  prizes = list; const reps = Math.max(1, Math.ceil(10 / Math.max(1, prizes.length)));
+  slices = []; for (let r = 0; r < reps; r++) prizes.forEach((p, i) => slices.push({ p, color: COLORS[i % COLORS.length] }));
+  seg = 360 / Math.max(1, slices.length); paint();
+}
+function shade(hex, k) { const n = parseInt(hex.slice(1), 16); const f = c => Math.max(0, Math.min(255, Math.round(c * k))); return `rgb(${f(n >> 16)},${f(n >> 8 & 255)},${f(n & 255)})`; }
+function wrap(label) {
+  if (label.length <= 13) return [label];
+  const parts = label.split(/\s+(?:·|\+|-)\s+/); if (parts.length === 2 && label.length <= 26) return parts;
+  const w = label.split(" "); let best = [label], d = 1e9;
+  for (let i = 1; i < w.length; i++) { const a = w.slice(0, i).join(" "), b = w.slice(i).join(" "); if (Math.abs(a.length - b.length) < d) { d = Math.abs(a.length - b.length); best = [a, b]; } }
+  return best;
+}
+function paint() {
+  const c = $("wheel"), g = c.getContext("2d"), W = c.width, cx = W / 2, rad = W / 2, a = Math.PI * 2 / slices.length;
+  g.clearRect(0, 0, W, W);
+  slices.forEach((s, i) => {
+    const a0 = -Math.PI / 2 + i * a, a1 = a0 + a;
+    const gr = g.createRadialGradient(cx, cx, rad * 0.12, cx, cx, rad);
+    gr.addColorStop(0, shade(s.color, 0.45)); gr.addColorStop(0.55, s.color); gr.addColorStop(1, shade(s.color, 1.35));
+    g.beginPath(); g.moveTo(cx, cx); g.arc(cx, cx, rad, a0, a1); g.closePath(); g.fillStyle = gr; g.fill();
+    // a soft gloss on one side of each slice
+    const gl = g.createLinearGradient(cx + Math.cos(a0) * rad, cx + Math.sin(a0) * rad, cx + Math.cos(a1) * rad, cx + Math.sin(a1) * rad);
+    gl.addColorStop(0, "rgba(255,255,255,.22)"); gl.addColorStop(0.5, "rgba(255,255,255,0)"); gl.addColorStop(1, "rgba(0,0,0,.22)");
+    g.fillStyle = gl; g.fill();
+    g.save(); g.translate(cx, cx); g.rotate(a0 + a / 2);
+    const lines = wrap(s.p.label.toUpperCase()), maxW = rad * 0.62, maxH = rad * Math.sin(a / 2) * 1.05;
+    let fs = Math.min(rad * 0.105, maxH / (lines.length + (s.p.value ? 0.75 : 0)) * 0.9);
+    g.font = `400 ${fs}px Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif`;
+    const widest = Math.max(...lines.map(l => g.measureText(l).width)); if (widest > maxW) fs *= maxW / widest;
+    g.font = `400 ${fs}px Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif`;
+    g.textAlign = "right"; g.textBaseline = "middle"; g.lineJoin = "round";
+    const total = lines.length * fs * 1.02 + (s.p.value ? fs * 0.7 : 0); let y = -total / 2 + fs * 0.51;
+    for (const l of lines) { g.lineWidth = fs * 0.2; g.strokeStyle = "rgba(0,0,0,.85)"; g.strokeText(l, rad * 0.93, y); g.fillStyle = "#fff"; g.fillText(l, rad * 0.93, y); y += fs * 1.02; }
+    if (s.p.value) { g.font = `400 ${fs * 0.6}px Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif`; y -= fs * 0.16; g.lineWidth = fs * 0.14; g.strokeText(s.p.value.toUpperCase(), rad * 0.93, y); g.fillStyle = "#ffe27a"; g.fillText(s.p.value.toUpperCase(), rad * 0.93, y); }
+    g.restore();
+  });
+  // gold dividers with a stud at the rim, then the inner and outer rings
+  for (let i = 0; i < slices.length; i++) {
+    const t = -Math.PI / 2 + i * a; g.beginPath(); g.moveTo(cx + Math.cos(t) * rad * 0.19, cx + Math.sin(t) * rad * 0.19); g.lineTo(cx + Math.cos(t) * rad, cx + Math.sin(t) * rad);
+    g.lineWidth = rad * 0.012; g.strokeStyle = "#ffd95a"; g.stroke();
+    g.beginPath(); g.arc(cx + Math.cos(t) * rad * 0.965, cx + Math.sin(t) * rad * 0.965, rad * 0.018, 0, 7); g.fillStyle = "#fff6c2"; g.fill();
+  }
+  g.beginPath(); g.arc(cx, cx, rad * 0.992, 0, 7); g.lineWidth = rad * 0.016; g.strokeStyle = "#3a2300"; g.stroke();
+}
+/* the mask darkens every slice except the winning one; it turns with the wheel */
+function paintMask(win) {
+  const c = $("mask"), g = c.getContext("2d"), W = c.width, cx = W / 2, a = Math.PI * 2 / slices.length;
+  g.clearRect(0, 0, W, W); g.fillStyle = "rgba(0,0,0,.66)";
+  slices.forEach((s, i) => { if (i === win) return; const a0 = -Math.PI / 2 + i * a; g.beginPath(); g.moveTo(cx, cx); g.arc(cx, cx, cx, a0, a0 + a); g.closePath(); g.fill(); });
+}
+(function bulbs() { const n = 28; for (let i = 0; i < n; i++) { const b = document.createElement("div"); b.className = "bulb"; const t = i / n * Math.PI * 2;
+  b.style.transform = `translate(calc(${Math.cos(t).toFixed(4)} * var(--S) * .5265), calc(${Math.sin(t).toFixed(4)} * var(--S) * .5265))`; b.style.animationDelay = (-(i % 4) * 0.275).toFixed(3) + "s"; $("rim").appendChild(b); } })();
+
+/* ---------------- sound: made in code so nothing has to load ---------------- */
+let AC = null, OUT = null;
+function ac() {
+  if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); const comp = AC.createDynamicsCompressor(); OUT = AC.createGain(); OUT.gain.value = VOL; OUT.connect(comp); comp.connect(AC.destination); }
+  return AC;
+}
+function tone(f, t, len, type, vol, f2) { const c = ac(), o = c.createOscillator(), g = c.createGain(); o.type = type || "sine"; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + len);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + len); o.connect(g); g.connect(OUT); o.start(t); o.stop(t + len + 0.02); }
+function noise(t, len, vol, f0, f1) { const c = ac(), n = Math.floor(c.sampleRate * len), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  const s = c.createBufferSource(), bp = c.createBiquadFilter(), g = c.createGain(); s.buffer = buf; bp.type = "bandpass"; bp.Q.value = 1.2; bp.frequency.setValueAtTime(f0, t); bp.frequency.exponentialRampToValueAtTime(f1, t + len);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + len * 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t + len); s.connect(bp); bp.connect(g); g.connect(OUT); s.start(t); }
+let lastTick = 0;
+function tick(slow) { const c = ac(), t = c.currentTime; if (t - lastTick < 0.028) return; lastTick = t; tone(1500 - slow * 500, t, 0.045, "square", 0.16, 500); noise(t, 0.03, 0.2, 3500, 1500); }
+const whoosh = () => { const t = ac().currentTime; noise(t, 0.7, 0.5, 250, 4200); [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, t + 0.25 + i * 0.07, 0.3, "triangle", 0.16)); };
+const riser = len => { const t = ac().currentTime; tone(90, t, len, "sawtooth", 0.07, 360); noise(t, len, 0.1, 400, 2600); };
+function bell(t, f, vol) { tone(f, t, 1.3, "sine", vol); tone(f * 2.76, t, 0.7, "sine", vol * 0.4); tone(f * 5.4, t, 0.3, "sine", vol * 0.2); }
+function fanfare(rare) { const t = ac().currentTime; [392, 523, 659, 784].forEach((f, i) => { tone(f, t + i * 0.13, 0.2, "sawtooth", 0.13); tone(f, t + i * 0.13, 0.2, "square", 0.06); });
+  [523, 659, 784, 1047].forEach(f => { tone(f, t + 0.55, 1.5, "sawtooth", 0.1); tone(f * 2, t + 0.55, 1.2, "triangle", 0.07); });
+  [0, 0.16, 0.32].forEach(d => bell(t + d, 1568, 0.2));
+  if (rare) for (let i = 0; i < 14; i++) bell(t + 1 + i * 0.16, i % 2 ? 2093 : 1568, 0.2); }
+function coins(len) { const t = ac().currentTime; for (let d = 0; d < len; d += R(0.025, 0.06)) tone(R(1900, 3800), t + d, 0.05, "sine", 0.07); }
+const samples = {};
+["chaching", "applause", "airhorn"].forEach(id => fetch("sfx/" + id + ".wav").then(r => r.arrayBuffer()).then(b => ac().decodeAudioData(b)).then(buf => { samples[id] = buf; }).catch(() => {}));
+function sample(id, delay, vol) { const b = samples[id]; if (!b) return; const c = ac(), s = c.createBufferSource(), g = c.createGain(); s.buffer = b; g.gain.value = vol; s.connect(g); g.connect(OUT); s.start(c.currentTime + (delay || 0)); live.add(s); s.onended = () => live.delete(s); }
+const live = new Set();
+
+/* ---------------- confetti ---------------- */
+const cf = { on: false, bits: [], until: 0 };
+function confetti(rare) {
+  const c = $("confetti"); c.width = innerWidth; c.height = innerHeight; const W = c.width, H = c.height, n = rare ? 420 : 240;
+  cf.bits = []; for (let i = 0; i < n; i++) { const side = i % 3; cf.bits.push({ x: side === 0 ? R(0, W) : side === 1 ? 0 : W, y: side === 0 ? R(-H, 0) : H * R(0.5, 1),
+    vx: side === 0 ? R(-1, 1) : (side === 1 ? 1 : -1) * R(4, 14) * W / 1600, vy: side === 0 ? R(2, 6) : -R(9, 22) * H / 900, r: R(0, 6.3), vr: R(-0.3, 0.3), z: R(0.008, 0.02) * H,
+    coin: Math.random() < (rare ? 0.6 : 0.3), col: COLORS[i % COLORS.length], d: side === 0 ? R(0, 2500) : R(0, 500) }); }
+  cf.until = performance.now() + (rare ? 9000 : 6000); if (!cf.on) { cf.on = true; cf.t0 = performance.now(); requestAnimationFrame(cfFrame); }
+}
+function cfFrame(now) {
+  const c = $("confetti"), g = c.getContext("2d"); g.clearRect(0, 0, c.width, c.height);
+  if (now > cf.until + 2500 || !cf.bits.length) { cf.on = false; return; }
+  const el = now - cf.t0, fade = Math.max(0, Math.min(1, (cf.until + 2500 - now) / 1500)); g.globalAlpha = fade;
+  for (const b of cf.bits) { if (el < b.d) continue; b.vy += 0.22; b.x += b.vx; b.y += b.vy; b.r += b.vr; b.vx *= 0.992;
+    if (b.y > c.height + 40 && now < cf.until) { b.y = -30; b.x = R(0, c.width); b.vy = R(2, 6); b.vx = R(-1, 1); }
+    g.save(); g.translate(b.x, b.y); g.rotate(b.r);
+    if (b.coin) { g.scale(1, Math.abs(Math.cos(b.r * 2)) * 0.9 + 0.1); g.beginPath(); g.arc(0, 0, b.z * 0.7, 0, 7); g.fillStyle = "#ffd34d"; g.fill(); g.lineWidth = b.z * 0.14; g.strokeStyle = "#a66d00"; g.stroke(); }
+    else { g.fillStyle = b.col; g.fillRect(-b.z * 0.5, -b.z * 0.28, b.z, b.z * 0.56); }
+    g.restore(); }
+  requestAnimationFrame(cfFrame);
+}
+
+/* ---------------- the show ---------------- */
+const A = (n, kf, ms, o) => n.animate(kf, Object.assign({ duration: ms, fill: "forwards", easing: "cubic-bezier(.2,1.3,.3,1)" }, o || {}));
+const setAngle = a => { angle = a; $("turn").style.transform = `rotate(${a}deg)`; };
+function idle(now) { if (!shown) return; if (!busy) setAngle(angle + 0.12); requestAnimationFrame(idle); }
+async function show() {
+  clearTimeout(hideTimer); if (shown) return; shown = true; try { await ac().resume(); } catch (e) {}
+  document.body.classList.remove("won", "rare", "spin"); $("dim").style.opacity = 1;
+  A($("stage"), [{ opacity: 0, transform: "scale(.25) rotate(-25deg)" }, { opacity: 1, transform: "scale(1) rotate(0deg)" }], 650);
+  A($("title"), [{ opacity: 0, transform: "translateY(-12vh)" }, { opacity: 1, transform: "translateY(0)" }], 500, { delay: 250 });
+  whoosh(); requestAnimationFrame(idle);
+}
+function hide() {
+  clearTimeout(hideTimer); runId++; if (!shown) return; shown = false; busy = false;
+  live.forEach(s => { try { s.stop(); } catch (e) {} }); live.clear(); cf.until = 0;
+  $("dim").style.opacity = 0; $("who").style.opacity = 0; document.body.classList.remove("won", "rare", "spin");
+  A($("stage"), [{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(.6)" }], 350, { easing: "ease-in" });
+  A($("title"), [{ opacity: 1 }, { opacity: 0 }], 250); A($("win"), [{ opacity: 0, transform: "translate(-50%, -50%) scale(.2)" }], 1);
+}
+async function spin(sp) {
+  if (!slices.length) return; const my = ++runId;
+  if (!shown) { await show(); await wait(1100); if (my !== runId) return; }
+  if (busy) return; busy = true; clearTimeout(hideTimer);
+  document.body.classList.remove("won", "rare"); document.body.classList.add("spin");
+  A($("win"), [{ opacity: 0, transform: "translate(-50%, -50%) scale(.2)" }], 1);
+  $("whoName").textContent = sp.winner || "…"; $("who").style.opacity = sp.winner ? 1 : 0;
+  const matches = slices.map((s, i) => s.p.id === sp.prize_id ? i : -1).filter(i => i >= 0), win = matches.length ? matches[Math.floor(Math.random() * matches.length)] : 0;
+  paintMask(win);
+  const rare = !!sp.rare, T = rare ? 11500 : 8200, turns = rare ? 9 : 7;
+  const want = ((-(win * seg + seg / 2 + R(-0.36, 0.36) * seg)) % 360 + 360) % 360, a0 = angle, base = Math.ceil(a0 / 360) * 360 + turns * 360 + want, D = base - a0;
+  riser(T / 1000 * 0.55);
+  let lastSlice = Math.floor(-a0 / seg); const t0 = performance.now();
+  await new Promise(done => { (function frame(now) {
+    if (my !== runId) return done();
+    const p = Math.min(1, (now - t0) / T), e = 1 - Math.pow(1 - p, rare ? 4.2 : 3.4); setAngle(a0 + D * e);
+    const sl = Math.floor(-angle / seg); if (sl !== lastSlice) { lastSlice = sl; tick(p); A($("pointer"), [{ transform: "rotate(-24deg)" }, { transform: "rotate(0deg)" }], 110, { easing: "ease-out" }); }
+    if (p < 1) requestAnimationFrame(frame); else done();
+  })(performance.now()); });
+  if (my !== runId) return;
+  // landed
+  document.body.classList.remove("spin"); document.body.classList.add("won"); if (rare) document.body.classList.add("rare");
+  $("who").style.opacity = 0;
+  A($("flash"), [{ opacity: 0 }, { opacity: 0.9, offset: 0.12 }, { opacity: 0 }], rare ? 900 : 500, { easing: "linear", iterations: rare ? 3 : 1 });
+  A($("stage"), [{ transform: "scale(1)" }, { transform: "scale(1.07)", offset: 0.3 }, { transform: "scale(1)" }], 420);
+  fanfare(rare); coins(rare ? 4.5 : 2.4); sample("chaching", 0.05, 0.8); sample("applause", 0.5, 0.75); if (rare) sample("airhorn", 0.1, 0.7);
+  confetti(rare);
+  await wait(rare ? 2100 : 1500); if (my !== runId) return;
+  $("winK").textContent = rare ? "★ JACKPOT ★" : "WINNER"; $("winName").textContent = sp.winner || "YOU"; $("winPrize").textContent = (sp.name || sp.label || "").toUpperCase(); $("winVal").textContent = (sp.value || "").toUpperCase();
+  A($("win"), [{ opacity: 0, transform: "translate(-50%, -50%) scale(.2)" }, { opacity: 1, transform: "translate(-50%, -50%) scale(1)" }], 520);
+  A($("win"), [{ transform: "translate(-50%, -50%) scale(1)" }, { transform: "translate(-50%, -50%) scale(1.035)" }], 700, { delay: 560, iterations: 30, direction: "alternate", easing: "ease-in-out", fill: "none" });
+  bell(ac().currentTime, 1047, 0.25); if (rare) { coins(3); confetti(true); }
+  busy = false;
+  hideTimer = setTimeout(hide, rare ? 24000 : 16000);          // leaves by itself if HIDE is never pressed
+}
+
+/* ---------------- live events from the control page ---------------- */
+let seen = null;
+async function poll() {
+  let pause = 30;
+  try {
+    const j = await (await fetch(WHEEL_URL + "?n=" + (seen ?? -1) + "&wait=" + (seen === null ? 0 : 20) + "&t=" + Date.now(), { cache: "no-store" })).json();
+    if (!j.ok) throw new Error(j.error || "bad reply");
+    setPrizes(j.prizes || []);
+    if (seen === null) seen = j.n;                             // first look: never replay an old spin
+    else if (j.n !== seen) { seen = j.n; const ev = j.event || {};
+      if (ev.type === "show") show(); else if (ev.type === "hide") hide(); else if (ev.type === "spin" && ev.spin) spin(ev.spin); }
+    if (qs.has("debug")) $("dbg").textContent = "event #" + seen + "  prizes: " + prizes.length + "  shown: " + shown + "  busy: " + busy + "  audio: " + (AC ? AC.state : "none");
+  } catch (e) { pause = 2000; }
+  setTimeout(poll, pause);
+}
+if (qs.has("demo")) {
+  setPrizes([{ id: 1, label: "IG FOLLOW + SHOUT OUT", value: "" }, { id: 2, label: "UNRELEASED SOUND PACK", value: "$50 value" }, { id: 3, label: "FREE THRONE", value: "$100 value" },
+    { id: 4, label: "VIP CLUB · 6 MONTHS", value: "$120 value" }, { id: 5, label: "1-ON-1 ZOOM CALL", value: "$500 value" }, { id: 6, label: "FREE ILLMIND BEAT", value: "$30K value" }]);
+  (async function loop() { const rare = qs.get("demo") === "rare", p = rare ? prizes[5] : prizes[Math.floor(Math.random() * 4)];
+    await show(); await wait(2200); await spin({ prize_id: p.id, label: p.label, name: p.label, value: p.value, winner: "Sample Artist", rare }); await wait(rare ? 9000 : 7000); hide(); await wait(1800); loop(); })();
+} else poll();
+window.wheel = { show, hide, spin, setPrizes, get angle() { return angle; }, get seg() { return seg; }, get slices() { return slices; } };
+</script>
+</body>
+</html>

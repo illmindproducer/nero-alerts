@@ -54,6 +54,7 @@
 </head>
 <body>
 <div id="dim"></div>
+<canvas id="confetti"></canvas>
 <div id="stage">
   <div id="rig">
     <div id="glow"></div>
@@ -66,7 +67,6 @@
 <div id="title" style="opacity:0">PRIZE WHEEL</div>
 <div id="who">SPINNING FOR <b id="whoName"></b></div>
 <div id="flash"></div>
-<canvas id="confetti"></canvas>
 <div id="win"><div class="k" id="winK">WINNER</div><div class="name" id="winName"></div><div class="wins">WINS</div><div class="prize" id="winPrize"></div><div class="val" id="winVal"></div></div>
 <div id="dbg"></div>
 <script>
@@ -164,26 +164,36 @@ const samples = {};
 function sample(id, delay, vol) { const b = samples[id]; if (!b) return; const c = ac(), s = c.createBufferSource(), g = c.createGain(); s.buffer = b; g.gain.value = vol; s.connect(g); g.connect(OUT); s.start(c.currentTime + (delay || 0)); live.add(s); s.onended = () => live.delete(s); }
 const live = new Set();
 
-/* ---------------- confetti ---------------- */
+/* ---------------- confetti ----------------
+   It bursts out from behind the wheel and every piece fades away as it nears any edge of the source, so nothing
+   is ever cut off by an edge. It works the same whatever shape the source is: wide, square or tall. */
 const cf = { on: false, bits: [], until: 0 };
+function launch(b, c, first) {
+  const cx = c.width / 2, cy = c.height / 2, a = R(0, 6.283), ca = Math.cos(a), sa = Math.sin(a);
+  const reach = Math.min(Math.abs(ca) > 1e-3 ? cx / Math.abs(ca) : 1e9, Math.abs(sa) > 1e-3 ? cy / Math.abs(sa) : 1e9), sp = reach * R(0.45, 1.02) / 66;   // far enough to get near the edge, never past it
+  b.x = cx; b.y = cy; b.vx = ca * sp; b.vy = sa * sp; b.r = R(0, 6.3); b.vr = R(-0.3, 0.3); b.d = first ? R(0, 600) : 0; b.t = 0; b.life = R(120, 200);
+}
 function confetti(rare) {
-  const c = $("confetti"); c.width = innerWidth; c.height = innerHeight; const W = c.width, H = c.height, n = rare ? 420 : 240;
-  cf.bits = []; for (let i = 0; i < n; i++) { const side = i % 3; cf.bits.push({ x: side === 0 ? R(0, W) : side === 1 ? 0 : W, y: side === 0 ? R(-H, 0) : H * R(0.5, 1),
-    vx: side === 0 ? R(-1, 1) : (side === 1 ? 1 : -1) * R(4, 14) * W / 1600, vy: side === 0 ? R(2, 6) : -R(9, 22) * H / 900, r: R(0, 6.3), vr: R(-0.3, 0.3), z: R(0.008, 0.02) * H,
-    coin: Math.random() < (rare ? 0.6 : 0.3), col: COLORS[i % COLORS.length], d: side === 0 ? R(0, 2500) : R(0, 500) }); }
-  cf.until = performance.now() + (rare ? 9000 : 6000); if (!cf.on) { cf.on = true; cf.t0 = performance.now(); requestAnimationFrame(cfFrame); }
+  const c = $("confetti"); c.width = innerWidth; c.height = innerHeight; const m = Math.min(c.width, c.height), n = rare ? 420 : 260;
+  cf.bits = []; for (let i = 0; i < n; i++) { const b = { z: R(0.012, 0.026) * m, coin: Math.random() < (rare ? 0.6 : 0.3), col: COLORS[i % COLORS.length] }; launch(b, c, true); cf.bits.push(b); }
+  cf.until = performance.now() + (rare ? 9000 : 6000); cf.t0 = performance.now(); if (!cf.on) { cf.on = true; requestAnimationFrame(cfFrame); }
 }
 function cfFrame(now) {
   const c = $("confetti"), g = c.getContext("2d"); g.clearRect(0, 0, c.width, c.height);
-  if (now > cf.until + 2500 || !cf.bits.length) { cf.on = false; return; }
-  const el = now - cf.t0, fade = Math.max(0, Math.min(1, (cf.until + 2500 - now) / 1500)); g.globalAlpha = fade;
-  for (const b of cf.bits) { if (el < b.d) continue; b.vy += 0.22; b.x += b.vx; b.y += b.vy; b.r += b.vr; b.vx *= 0.992;
-    if (b.y > c.height + 40 && now < cf.until) { b.y = -30; b.x = R(0, c.width); b.vy = R(2, 6); b.vx = R(-1, 1); }
-    g.save(); g.translate(b.x, b.y); g.rotate(b.r);
+  if (now > cf.until + 3500 || !cf.bits.length) { cf.on = false; return; }
+  const m = Math.min(c.width, c.height), soft = m * 0.14, el = now - cf.t0, more = now < cf.until;
+  for (const b of cf.bits) {
+    if (el < b.d) continue;
+    b.t++; b.vx *= 0.985; b.vy = b.vy * 0.985 + m * 0.00005; b.x += b.vx; b.y += b.vy; b.r += b.vr;
+    const edge = Math.min(b.x, b.y, c.width - b.x, c.height - b.y);                        // distance to the nearest edge
+    const alpha = Math.max(0, Math.min(1, edge / soft)) * Math.min(1, b.t / 8) * Math.max(0, Math.min(1, (b.life - b.t) / 40));
+    if (b.t >= b.life || edge <= 0) { if (more) launch(b, c, false); else b.d = 1e12; continue; }   // gone: send it out again while the party lasts
+    g.globalAlpha = alpha; g.save(); g.translate(b.x, b.y); g.rotate(b.r);
     if (b.coin) { g.scale(1, Math.abs(Math.cos(b.r * 2)) * 0.9 + 0.1); g.beginPath(); g.arc(0, 0, b.z * 0.7, 0, 7); g.fillStyle = "#ffd34d"; g.fill(); g.lineWidth = b.z * 0.14; g.strokeStyle = "#a66d00"; g.stroke(); }
     else { g.fillStyle = b.col; g.fillRect(-b.z * 0.5, -b.z * 0.28, b.z, b.z * 0.56); }
-    g.restore(); }
-  requestAnimationFrame(cfFrame);
+    g.restore();
+  }
+  g.globalAlpha = 1; requestAnimationFrame(cfFrame);
 }
 
 /* ---------------- the show ---------------- */

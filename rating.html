@@ -6,12 +6,12 @@
 <meta name="robots" content="noindex,nofollow">
 <title>Rating Overlay</title>
 <style>
-  :root { --u: 1px; --green: #39ff6a; --gold: #ffd700; --orange: #f97316; --red: #ff4d4d; --ink: #eafff0; --dim: #6f8a78; }
+  :root { --bg: .45; --u: 1px; --green: #39ff6a; --gold: #ffd700; --orange: #f97316; --red: #ff4d4d; --ink: #eafff0; --dim: #6f8a78; }
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
-  body { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--ink); }
+  body { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--ink); text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 8px rgba(0,0,0,.6); }
   #card {
     position: fixed; width: calc(600 * var(--u)); padding: calc(26 * var(--u)) calc(28 * var(--u)) calc(24 * var(--u));
-    background: linear-gradient(160deg, rgba(10,18,13,.94), rgba(4,8,6,.94));
+    background: linear-gradient(160deg, rgba(10,18,13,var(--bg)), rgba(4,8,6,var(--bg)));
     border: calc(2 * var(--u)) solid var(--green); border-radius: calc(18 * var(--u));
     box-shadow: 0 0 calc(34 * var(--u)) rgba(57,255,106,.35), inset 0 0 calc(40 * var(--u)) rgba(57,255,106,.07);
     opacity: 0; transform: translateX(calc(-80 * var(--u))) scale(.94); transition: opacity .45s ease, transform .55s cubic-bezier(.2,1.3,.3,1);
@@ -46,11 +46,11 @@
   #card.on .row:nth-child(3) { transition-delay: .24s } #card.on .row:nth-child(4) { transition-delay: .31s }
   #card.on .row:nth-child(5) { transition-delay: .38s }
   .lab { font-size: calc(20 * var(--u)); letter-spacing: .12em; color: var(--ink); }
-  .bar { position: relative; height: calc(24 * var(--u)); border-radius: calc(5 * var(--u)); background: rgba(255,255,255,.07); overflow: hidden; }
+  .bar { position: relative; height: calc(24 * var(--u)); border-radius: calc(5 * var(--u)); background: rgba(0,0,0,.35); overflow: hidden; }
   .fill { position: absolute; inset: 0; transform-origin: left center; transform: scaleX(0); background: var(--c, var(--green));
           transition: transform .9s cubic-bezier(.2,1.25,.3,1), background-color .4s ease; }
   /* ten blocks: the gaps are drawn on top so the fill reads as LED segments */
-  .bar::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 3px), rgba(4,8,6,.95) calc(10% - 3px) 10%); }
+  .bar { -webkit-mask: repeating-linear-gradient(90deg, #000 0 calc(10% - 3px), transparent calc(10% - 3px) 10%); mask: repeating-linear-gradient(90deg, #000 0 calc(10% - 3px), transparent calc(10% - 3px) 10%); }
   .sheen { position: absolute; top: 0; bottom: 0; width: 30%; left: -30%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent); opacity: 0; }
   .row.hit .sheen { animation: sweep .9s ease-out 1; }
   @keyframes sweep { 0% { transform: translateX(0); opacity: .9 } 100% { transform: translateX(460%); opacity: 0 } }
@@ -90,12 +90,14 @@
    By default the card fills the whole page, so the browser source IS the card: size and place it in Streamlabs.
    URL options: ?pos=bl|br|tl|tr|c   old corner mode on a 1920x1080 canvas
                 ?scale=0.9           shrink or grow the card inside the page
+                ?bg=0.45             how solid the dark panel is: 0 = fully see-through, 1 = solid (default 0.45)
                 ?demo=1              show sample ratings (for placing it in Streamlabs) */
 const STATE_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-rating";
 const CATS = [["drums", "DRUMS"], ["melody", "MELODY"], ["vocals", "VOCALS"], ["mix", "MIX"], ["originality", "ORIGINALITY"]];
 const qs = new URLSearchParams(location.search);
 document.body.dataset.pos = qs.get("pos") || "full";
 const SCALE = parseFloat(qs.get("scale") || "1") || 1;
+if (qs.has("bg")) document.documentElement.style.setProperty("--bg", Math.max(0, Math.min(1, parseFloat(qs.get("bg")) || 0)));   // 0 = no panel, 1 = solid
 let CARD_H = 0;                       // the card's natural height in design units, measured once
 function fit() {
   const w = innerWidth, h = innerHeight, root = document.documentElement.style;

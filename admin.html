@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#060a07">
+<title>Stream Admin</title>
+<style>
+  :root { --green: #39ff6a; --gold: #ffd700; --orange: #f97316; --red: #ff4d4d; --amber: #ffb000; --cyan: #5ad7ff; --ink: #eafff0; --dim: #7f9a88; --panel: #0c140f; --panel2: #101a14; --line: #1d2e23; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: #060a07; color: var(--ink); font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; }
+  body { min-height: 100dvh; padding: 14px 16px 60px; max-width: 1180px; margin: 0 auto; }
+  h1 { margin: 0; font: 400 28px/1 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; letter-spacing: .06em; color: var(--green); }
+  h1 b { color: var(--ink); font-weight: 400; }
+  h2 { margin: 22px 0 10px; font: 400 18px/1 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; letter-spacing: .09em; color: var(--green); }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .pill { font-size: 11px; letter-spacing: .12em; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); white-space: nowrap; max-width: 46ch; overflow: hidden; text-overflow: ellipsis; }
+  .pill.air { color: #06110a; background: var(--green); border-color: var(--green); font-weight: 700; }
+  .pill.err { color: var(--red); border-color: var(--red); }
+  button, select, input, textarea { font: inherit; color: var(--ink); }
+  .btn { height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); cursor: pointer; letter-spacing: .06em; white-space: nowrap; }
+  .btn:hover { border-color: var(--green); }
+  .btn.on { border-color: var(--gold); color: var(--gold); }
+  .btn.danger { border-color: var(--red); color: var(--red); }
+  a.btn { display: inline-flex; align-items: center; text-decoration: none; color: var(--ink); }
+  .tabs { display: flex; gap: 4px; margin-top: 14px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .tab { padding: 10px 14px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--dim); cursor: pointer; letter-spacing: .12em; white-space: nowrap; }
+  .tab.on { color: var(--green); border-bottom-color: var(--green); }
+  .view { display: none; } .view.on { display: block; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .filters select, .filters input[type=search] { height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); outline: 0; }
+  .filters input[type=search] { flex: 1; min-width: 160px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+  .tile small { display: block; color: var(--dim); letter-spacing: .12em; font-size: 11px; }
+  .tile .n { font: 400 38px/1 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .s { color: var(--dim); margin-top: 4px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meter { height: 6px; border-radius: 3px; background: var(--line); margin-top: 8px; overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: 3px; background: var(--green); }
+
+  /* ratings table: a grid per row, so it can collapse on a phone */
+  .tbl { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); }
+  .row { display: grid; grid-template-columns: 62px minmax(0, 1fr) repeat(5, 74px) 120px 34px; gap: 10px; align-items: center; padding: 9px 12px; border-top: 1px solid var(--line); }
+  .row.head { border-top: 0; color: var(--dim); font-size: 11px; letter-spacing: .1em; background: var(--panel2); }
+  .row.head span { cursor: pointer; user-select: none; white-space: nowrap; } .row.head span.on { color: var(--green); }
+  .row.item { cursor: pointer; } .row.item:hover { background: #0f1913; }
+  .when { color: var(--dim); font-size: 11px; }
+  .song { min-width: 0; } .song b { display: block; font-weight: 400; font: 400 17px/1.15 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .song i { display: block; font-style: normal; color: var(--dim); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sc { min-width: 0; } .sc .v { font-size: 12px; } .sc .v.na { color: var(--dim); }
+  .bar { height: 5px; border-radius: 3px; background: var(--line); margin-top: 4px; overflow: hidden; } .bar i { display: block; height: 100%; border-radius: 3px; }
+  .ov { display: flex; align-items: baseline; gap: 8px; min-width: 0; } .ov .big { font: 400 26px/1 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; }
+  .ov .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; align-self: center; } .ov .tier { font-size: 10px; letter-spacing: .08em; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .star { color: var(--gold); font-size: 16px; text-align: center; }
+  .edit { grid-column: 1 / -1; display: none; padding: 4px 0 6px; } .row.open .edit { display: block; }
+  .edit .cats { display: none; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 10px; }
+  .edit textarea { width: 100%; min-height: 54px; border-radius: 8px; border: 1px solid var(--line); background: #070c09; padding: 8px 10px; outline: 0; resize: vertical; }
+  .edit .acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  .edit .acts input { width: 70px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: #070c09; padding: 0 8px; outline: 0; }
+  .empty { padding: 26px 14px; color: var(--dim); text-align: center; line-height: 1.6; }
+
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+  .card h3 { margin: 0 0 10px; font-size: 11px; letter-spacing: .14em; color: var(--dim); font-weight: 400; }
+  .hb { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 44px; gap: 10px; align-items: center; padding: 5px 0; }
+  .hb .l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .hb .l small { color: var(--dim); }
+  .hb .t { height: 14px; border-radius: 0 4px 4px 0; background: transparent; } .hb .t i { display: block; height: 100%; border-radius: 0 4px 4px 0; }
+  .hb .v { text-align: right; }
+  .hb:hover .l { color: var(--green); }
+  .lines { max-height: 460px; overflow: auto; } .line { padding: 8px 0; border-top: 1px solid var(--line); line-height: 1.45; } .line:first-child { border-top: 0; } .line small { color: var(--dim); display: block; font-size: 11px; }
+  .lnk { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); } .lnk:first-of-type { border-top: 0; }
+  .lnk code { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; } .lnk small { color: var(--dim); display: block; font-size: 11px; }
+  .note { color: var(--dim); line-height: 1.6; } .note b { color: var(--ink); font-weight: 400; }
+  #gate { display: none; margin-top: 30px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  #gate input { width: 100%; height: 38px; margin-top: 8px; border-radius: 8px; border: 1px solid var(--line); background: #070c09; padding: 0 10px; outline: 0; }
+  @media (max-width: 820px) {
+    .row { grid-template-columns: 50px minmax(0, 1fr) 96px 24px; }
+    .row > .sc, .row.head .c { display: none; }
+    .edit .cats { display: grid; }
+    .ov .tier { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>STREAM <b>ADMIN</b></h1>
+  <div class="pills"><span class="pill" id="live">CHECKING…</span><span class="pill" id="nowSong" style="display:none"></span><span class="pill" id="queue" style="display:none"></span>
+    <button class="btn" id="refresh">REFRESH</button><a class="btn" href="rate.html">CONTROL PAGE</a></div>
+</div>
+<div id="gate">Paste the control key to open the dashboard.<input id="keyin" type="password" placeholder="control key" autocomplete="off"></div>
+<div id="app" style="display:none">
+  <div class="tabs" id="tabs"></div>
+
+  <div class="view" data-v="ratings">
+    <div class="filters">
+      <select id="fStream" aria-label="Stream"></select>
+      <input type="search" id="fSearch" placeholder="Search song or artist">
+      <button class="btn" id="fPlace">★ PLACEMENT READY ONLY</button>
+      <button class="btn" id="csv">EXPORT CSV</button>
+    </div>
+    <div class="tiles" id="rTiles"></div>
+    <div class="tbl" id="rTable"></div>
+  </div>
+
+  <div class="view" data-v="board">
+    <div class="tiles" id="bTiles"></div>
+    <div class="cols" style="margin-top:14px">
+      <div class="card"><h3>TOP 20 · OVERALL · ALL STREAMS</h3><div id="bTop"></div></div>
+      <div>
+        <div class="card"><h3>HOW THE SCORES SPREAD</h3><div id="bTiers"></div></div>
+        <div class="card" style="margin-top:14px"><h3>BEST IN EACH CATEGORY</h3><div id="bCats"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="view" data-v="pads">
+    <div class="filters"><select id="pStream" aria-label="Stream"></select></div>
+    <div class="tiles" id="pTiles"></div>
+    <div class="card" style="margin-top:14px"><h3>PRESSES PER PAD</h3><div id="pBars"></div></div>
+  </div>
+
+  <div class="view" data-v="trooper">
+    <div class="tiles" id="tTiles"></div>
+    <div class="cols" style="margin-top:14px">
+      <div class="card"><h3>WHAT HE SAID · MOST RECENT FIRST</h3><div class="lines" id="tLines"></div></div>
+      <div class="card"><h3>VOICE MODELS · IN THE ORDER HE USES THEM</h3><div id="tChain"></div><p class="note" id="tNote"></p></div>
+    </div>
+  </div>
+
+  <div class="view" data-v="system">
+    <div class="card" style="margin-top:14px"><h3>BROWSER SOURCE LINKS</h3><div id="sLinks"></div></div>
+    <div class="card" style="margin-top:14px"><h3>IF SOMETHING LOOKS WRONG IN STREAMLABS</h3>
+      <p class="note"><b>Old version showing:</b> open the source's properties and click “Refresh cache of current page”.<br>
+      <b>You can't hear a source:</b> Advanced Audio → Audio Monitoring → “Monitor and Output”.<br>
+      <b>Trooper goes quiet:</b> check the TROOPER tab; he stops at his daily limits and when every voice model is used up.</p></div>
+    <div class="tiles" id="sTiles"></div>
+  </div>
+</div>
+
+<script>
+/* Admin dashboard for the stream overlay system. Reads everything from the nero-admin function (control key needed).
+   To add a section for a new overlay: add a tab to TABS, a <div class="view" data-v="…">, and a draw function in DRAW. */
+const $ = id => document.getElementById(id);
+const ADMIN_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-admin";
+const FEED_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-feed";
+const BRAIN_URL = "https://xosofmhvgnxschaitgnb.supabase.co/functions/v1/buddy-brain";
+const SITE = "https://illmindproducer.github.io/nero-alerts/";
+const CATS = [["drums", "DRUMS"], ["melody", "MELODY"], ["vocals", "VOCALS"], ["mix", "MIX"], ["originality", "ORIGINAL"]];
+const PADS = { fah: "FAHHH", airhorn: "AIR HORN", boom: "BOOM", bruh: "BRUH", trombone: "FAIL", crickets: "CRICKETS", scratch: "SCRATCH", rimshot: "BA-DUM-TSS", explosion: "BOMB", gunshots: "SHOTS", laugh: "LAUGH", applause: "APPLAUSE", oooh: "OOOOH", chaching: "CHA-CHING", buzzer: "WRONG", siren: "SIREN" };
+const TABS = [["ratings", "RATINGS"], ["board", "LEADERBOARD"], ["pads", "SOUND PADS"], ["trooper", "TROOPER"], ["system", "SYSTEM"]];
+const colour = s => s >= 90 ? "var(--gold)" : s >= 75 ? "var(--green)" : s >= 60 ? "var(--orange)" : "var(--red)";
+const tierName = s => s >= 90 ? "ELITE" : s >= 75 ? "STRONG" : s >= 60 ? "GETTING THERE" : "KEEP WORKING";
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));   // names come from the public: always escape
+const num = v => typeof v === "number";
+const fmtDay = d => d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+const fmtTime = d => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+const avg = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null;
+
+let KEY = "";
+try { const m = location.hash.match(/k=([^&]+)/); if (m) { KEY = decodeURIComponent(m[1]); localStorage.setItem("rating_key", KEY); history.replaceState(null, "", location.pathname); } else KEY = localStorage.getItem("rating_key") || ""; } catch (e) {}
+const D = { ratings: [], sfx: [], buddy: [], now: null, brain: null, streams: [] };
+const UI = { tab: "ratings", stream: "all", search: "", place: false, sort: "time", dir: -1, open: null };
+try { UI.tab = localStorage.getItem("admin_tab") || "ratings"; } catch (e) {}
+if (!TABS.some(t => t[0] === UI.tab)) UI.tab = "ratings";
+
+/* A "stream" is a run of activity with no gap longer than 4 hours. Built from every rating and pad press. */
+function buildStreams() {
+  const times = [...D.ratings.map(r => +new Date(r.first_rated_at)), ...D.sfx.map(e => +new Date(e.at))].sort((a, b) => a - b);
+  const out = []; let cur = null;
+  for (const t of times) { if (!cur || t - cur.end > 4 * 3600e3) out.push(cur = { start: t, end: t }); else cur.end = t; }
+  out.reverse(); out.forEach((s, i) => { s.id = String(s.start); s.label = fmtDay(new Date(s.start)) + (i === 0 ? " · latest" : ""); });
+  D.streams = out;
+}
+const inStream = (t, id) => { if (id === "all") return true; const s = D.streams.find(x => x.id === id); t = +new Date(t); return !!s && t >= s.start && t <= s.end; };
+function fillStreamSelect(sel) {
+  const el = $(sel), keep = UI.stream;
+  el.innerHTML = `<option value="all">All streams</option>` + D.streams.map(s => `<option value="${s.id}">${esc(s.label)}</option>`).join("");
+  el.value = D.streams.some(s => s.id === keep) ? keep : "all"; UI.stream = el.value;
+}
+
+async function api(method, body) {
+  const r = await fetch(ADMIN_URL, { method, headers: { "content-type": "application/json", "x-rating-key": KEY }, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+  const j = await r.json(); if (!j.ok) throw new Error(j.error || "failed"); return j;
+}
+async function load() {
+  if (!KEY) { $("gate").style.display = "block"; return; }
+  try {
+    const j = await api("GET"); Object.assign(D, { ratings: j.ratings, sfx: j.sfx, buddy: j.buddy, now: j.now });
+    $("gate").style.display = "none"; $("app").style.display = "block";
+    buildStreams(); draw();
+  } catch (e) {
+    if (/bad key/.test(e.message)) { $("gate").style.display = "block"; $("app").style.display = "none"; }
+    $("live").textContent = "CAN'T LOAD: " + e.message.toUpperCase(); $("live").className = "pill err";
+  }
+  fetch(BRAIN_URL, { headers: { "x-rating-key": KEY }, cache: "no-store" }).then(r => r.json()).then(j => { D.brain = j.ok ? j : null; if (UI.tab === "trooper") DRAW.trooper(); }).catch(() => {});
+}
+async function nero() {
+  try {
+    const j = await (await fetch(FEED_URL + "?t=" + Date.now(), { cache: "no-store" })).json();
+    $("live").textContent = j.live ? "SUBMISSIONS OPEN" : "SUBMISSIONS CLOSED";   // Nero's "live" only means the submission portal is open, not that a stream is running $("live").className = "pill" + (j.live ? " air" : "");
+    const c = j.live && j.current; $("nowSong").style.display = c ? "" : "none"; if (c) $("nowSong").textContent = "NOW: " + c.song + " — " + c.name;
+    $("queue").style.display = j.live ? "" : "none"; $("queue").textContent = (j.queueCount ?? 0) + " IN QUEUE";
+  } catch (e) { if ($("live").textContent === "CHECKING…") $("live").textContent = "NERO: NO SIGNAL"; }
+}
+
+/* ---------------- RATINGS ---------------- */
+function ratingRows() {
+  const q = UI.search.trim().toLowerCase();
+  const rows = D.ratings.filter(r => inStream(r.first_rated_at, UI.stream) && (!UI.place || r.placement) && (!q || (r.song + " " + r.artist).toLowerCase().includes(q)));
+  const key = UI.sort, val = r => key === "time" ? +new Date(r.first_rated_at) : key === "song" ? r.song.toLowerCase() : key === "overall" ? (r.overall ?? -1) : (num(r.scores?.[key]) ? r.scores[key] : -1);
+  return rows.sort((a, b) => (val(a) > val(b) ? 1 : val(a) < val(b) ? -1 : 0) * UI.dir);
+}
+const tile = (label, n, sub, c) => `<div class="tile"><small>${label}</small><div class="n"${c ? ` style="color:${c}"` : ""}>${n}</div><div class="s">${sub || "&nbsp;"}</div></div>`;
+const scoreCell = v => v === "na" ? `<div class="sc"><div class="v na">N/A</div><div class="bar"></div></div>` : !num(v) ? `<div class="sc"><div class="v na">—</div><div class="bar"></div></div>`
+  : `<div class="sc" title="${v} out of 100"><div class="v">${v}</div><div class="bar"><i style="width:${v}%;background:${colour(v)}"></i></div></div>`;
+const DRAW = {
+  ratings() {
+    const rows = ratingRows(), scored = rows.filter(r => num(r.overall)), best = scored.slice().sort((a, b) => b.overall - a.overall)[0], a = avg(scored.map(r => r.overall));
+    $("rTiles").innerHTML = tile("SONGS RATED", rows.length, UI.stream === "all" ? "across " + D.streams.length + " stream" + (D.streams.length === 1 ? "" : "s") : "this stream")
+      + tile("AVERAGE OVERALL", a ?? "—", a !== null ? tierName(a) : "", a !== null ? colour(a) : "")
+      + tile("TOP SCORE", best ? best.overall : "—", best ? esc(best.song) + " — " + esc(best.artist) : "", best ? colour(best.overall) : "")
+      + tile("PLACEMENT READY", rows.filter(r => r.placement).length, "marked with ★", "var(--gold)");
+    const h = (k, label, cls) => `<span data-s="${k}" class="${cls || ""}${UI.sort === k ? " on" : ""}">${label}${UI.sort === k ? (UI.dir < 0 ? " ▼" : " ▲") : ""}</span>`;
+    let html = `<div class="row head">${h("time", "TIME")}${h("song", "SONG")}${CATS.map(c => h(c[0], c[1], "c")).join("")}${h("overall", "OVERALL")}<span></span></div>`;
+    if (!rows.length) html += `<div class="empty">${D.ratings.length ? "Nothing matches these filters." : "No rated songs yet.<br>Every song you rate on the control page is saved here from now on."}</div>`;
+    for (const r of rows) {
+      const d = new Date(r.first_rated_at), o = r.overall;
+      html += `<div class="row item${UI.open === r.id ? " open" : ""}" data-id="${r.id}">
+        <div class="when">${esc(fmtTime(d))}<br>${esc(d.toLocaleDateString(undefined, { month: "numeric", day: "numeric" }))}</div>
+        <div class="song"><b>${esc(r.song) || "(no title)"}</b><i>${esc(r.artist)}${r.note ? " · 📝" : ""}</i></div>
+        ${CATS.map(c => scoreCell(r.scores?.[c[0]])).join("")}
+        <div class="ov">${num(o) ? `<span class="dot" style="background:${colour(o)}"></span><span class="big">${o}</span><span class="tier">${tierName(o)}</span>` : `<span class="big" style="color:var(--dim)">—</span>`}</div>
+        <div class="star">${r.placement ? "★" : ""}</div>
+        <div class="edit">
+          <div class="cats">${CATS.map(c => `<div><small style="color:var(--dim);letter-spacing:.1em">${c[1]}</small>${scoreCell(r.scores?.[c[0]])}</div>`).join("")}</div>
+          <textarea placeholder="Private note about this song (only you see it)">${esc(r.note)}</textarea>
+          <div class="acts"><button class="btn" data-a="save">SAVE NOTE</button><button class="btn${r.placement ? " on" : ""}" data-a="place">★ PLACEMENT READY</button>
+            <span style="color:var(--dim)">OVERALL</span><input type="number" min="0" max="100" value="${num(o) ? o : ""}"><button class="btn" data-a="overall">SET</button>
+            <span style="flex:1"></span><button class="btn danger" data-a="del">DELETE</button></div>
+        </div></div>`;
+    }
+    $("rTable").innerHTML = html;
+  },
+  board() {
+    const all = D.ratings.filter(r => num(r.overall)), a = avg(all.map(r => r.overall));
+    $("bTiles").innerHTML = tile("SONGS RATED · ALL TIME", D.ratings.length, D.streams.length + " stream" + (D.streams.length === 1 ? "" : "s")) + tile("AVERAGE OVERALL", a ?? "—", a !== null ? tierName(a) : "", a !== null ? colour(a) : "")
+      + tile("ELITE (90+)", all.filter(r => r.overall >= 90).length, "", "var(--gold)") + tile("PLACEMENT READY", D.ratings.filter(r => r.placement).length, "", "var(--gold)");
+    const hb = (label, sub, v, max, c, tip) => `<div class="hb" title="${esc(tip)}"><div class="l">${label}${sub ? ` <small>${sub}</small>` : ""}</div><div class="t"><i style="width:${max ? Math.max(1, v / max * 100) : 0}%;background:${c}"></i></div><div class="v">${v}</div></div>`;
+    const top = all.slice().sort((x, y) => y.overall - x.overall).slice(0, 20);
+    $("bTop").innerHTML = top.length ? top.map((r, i) => hb(`${i + 1}. ${esc(r.song)}${r.placement ? " ★" : ""}`, esc(r.artist), r.overall, 100, colour(r.overall), `${r.song} — ${r.artist}: ${r.overall} (${tierName(r.overall)}), ${fmtDay(new Date(r.first_rated_at))}`)).join("") : `<div class="empty">No scores yet.</div>`;
+    const tiers = [["ELITE", 90, 101], ["STRONG", 75, 90], ["GETTING THERE", 60, 75], ["KEEP WORKING", 0, 60]].map(([n, lo, hi]) => [n, all.filter(r => r.overall >= lo && r.overall < hi).length, lo]);
+    const tmax = Math.max(1, ...tiers.map(t => t[1]));
+    $("bTiers").innerHTML = tiers.map(([n, c, lo]) => hb(n, lo ? lo + "+" : "under 60", c, tmax, colour(lo), `${c} song${c === 1 ? "" : "s"} scored ${n}`)).join("");
+    $("bCats").innerHTML = CATS.map(([k, label]) => { const b = D.ratings.filter(r => num(r.scores?.[k])).sort((x, y) => y.scores[k] - x.scores[k])[0];
+      return b ? hb(label, esc(b.song) + " — " + esc(b.artist), b.scores[k], 100, colour(b.scores[k]), `${label}: ${b.song} — ${b.artist}, ${b.scores[k]}`) : hb(label, "none yet", 0, 100, "var(--line)", label); }).join("");
+  },
+  pads() {
+    const ev = D.sfx.filter(e => inStream(e.at, UI.stream)), n = {}; ev.forEach(e => n[e.id] = (n[e.id] || 0) + 1);
+    const list = Object.keys(PADS).map(id => [id, n[id] || 0]).sort((a, b) => b[1] - a[1]), max = Math.max(1, ...list.map(x => x[1])), fav = list[0];
+    $("pTiles").innerHTML = tile("PAD PRESSES", ev.length, UI.stream === "all" ? "all streams" : "this stream") + tile("FAVOURITE PAD", fav && fav[1] ? PADS[fav[0]] : "—", fav && fav[1] ? fav[1] + " presses" : "")
+      + tile("PADS NEVER USED", list.filter(x => !x[1]).length, "of 16") + tile("SOUND ONLY", ev.filter(e => !e.graphic).length, "pressed with graphics off");
+    $("pBars").innerHTML = list.map(([id, c]) => `<div class="hb" title="${PADS[id]}: ${c} press${c === 1 ? "" : "es"}"><div class="l">${PADS[id]}</div><div class="t"><i style="width:${c ? Math.max(1, c / max * 100) : 0}%;background:var(--green)"></i></div><div class="v">${c}</div></div>`).join("");
+  },
+  trooper() {
+    const b = D.brain, u = b?.usage, caps = b?.caps;
+    if (!u) $("tTiles").innerHTML = tile("TROOPER", "—", "could not read his usage right now");
+    else {
+      const sec = u.audio_sec || 0, hrs = Math.floor(sec / 3600), min = Math.round(sec % 3600 / 60), cost = sec * 0.00017 + (u.spoken || 0) * 0.003;
+      const meter = (v, cap) => `<div class="meter" title="${Math.round(v / cap * 100)}% of today's limit"><i style="width:${Math.min(100, v / cap * 100)}%;background:${v / cap > 0.85 ? "var(--red)" : "var(--green)"}"></i></div>`;
+      $("tTiles").innerHTML = `<div class="tile"><small>LISTENED TODAY</small><div class="n">${hrs}h ${min}m</div><div class="s">limit ${Math.round(caps.DAILY_AUDIO_SEC / 3600)}h a day</div>${meter(sec, caps.DAILY_AUDIO_SEC)}</div>`
+        + `<div class="tile"><small>LINES SPOKEN TODAY</small><div class="n">${u.spoken}</div><div class="s">limit ${caps.DAILY_SPOKEN} a day</div>${meter(u.spoken, caps.DAILY_SPOKEN)}</div>`
+        + tile("EST. COST TODAY", "$" + cost.toFixed(2), "rough estimate, not Google's bill") + tile("CLIPS HEARD", u.calls, "resets daily (" + esc(u.day) + ")");
+    }
+    $("tLines").innerHTML = D.buddy.length ? D.buddy.map(l => `<div class="line"><small>${esc(fmtDay(new Date(l.at)))} · ${esc(fmtTime(new Date(l.at)))}</small>${esc(l.text)}</div>`).join("") : `<div class="empty">Nothing saved yet. His lines are saved here from now on.</div>`;
+    const benched = b?.benched || [];
+    $("tChain").innerHTML = (b?.tts_chain || []).map((m, i) => { const out = benched.some(x => (x.model || x) === m);
+      return `<div class="hb" style="grid-template-columns:minmax(0,1fr) auto"><div class="l">${i + 1}. ${esc(m)}</div><div class="v" style="color:${out ? "var(--red)" : "var(--dim)"}">${out ? "USED UP" : "READY"}</div></div>`; }).join("") || `<div class="empty">—</div>`;
+    $("tNote").innerHTML = "Each voice model allows about <b>100 lines a day</b>. He moves down the list as each runs out; the last two speak slowly.";
+  },
+  system() {
+    const links = [["Alerts", "index.html", "Skip, Superskip and Throne clips"], ["Rating card + sound pads", "rating.html", "Also draws the pad graphics"], ["Trooper", "buddy.html", "The talking head"],
+      ["Pad graphics only", "fx.html", "Optional. Add ?fx=0 to the rating link if you use it"], ["Control page", "rate.html#k=" + encodeURIComponent(KEY), "PRIVATE: contains your key"], ["This dashboard", "admin.html#k=" + encodeURIComponent(KEY), "PRIVATE: contains your key"]];
+    $("sLinks").innerHTML = links.map(([n, p, s], i) => `<div class="lnk"><div>${n}<small>${s}</small></div><code>${esc(SITE + p.replace(/#k=.*/, "#k=••••••"))}</code><button class="btn" data-copy="${i}">COPY</button></div>`).join("");
+    $("sLinks").onclick = e => { const i = e.target.dataset.copy; if (i === undefined) return; navigator.clipboard.writeText(SITE + links[i][1]).then(() => { e.target.textContent = "COPIED"; setTimeout(() => e.target.textContent = "COPY", 1200); }); };
+    const n = D.now || {};
+    $("sTiles").innerHTML = tile("RATING UPDATES SENT", n.rev ?? "—", "since the system was built") + tile("PAD PRESSES", n.sfx_n ?? "—", "all time") + tile("TROOPER LINES", n.buddy_n ?? "—", "all time")
+      + tile("LAST RATING CHANGE", n.updated_at ? esc(fmtTime(new Date(n.updated_at))) : "—", n.updated_at ? esc(fmtDay(new Date(n.updated_at))) : "");
+  },
+};
+function draw() {
+  fillStreamSelect("fStream"); fillStreamSelect("pStream");
+  $("tabs").innerHTML = TABS.map(([k, l]) => `<button class="tab${UI.tab === k ? " on" : ""}" data-t="${k}">${l}</button>`).join("");
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.dataset.v === UI.tab));
+  DRAW[UI.tab]();
+}
+
+/* ---------------- events ---------------- */
+$("tabs").onclick = e => { const t = e.target.dataset.t; if (!t) return; UI.tab = t; try { localStorage.setItem("admin_tab", t); } catch (x) {} draw(); };
+$("fStream").onchange = $("pStream").onchange = e => { UI.stream = e.target.value; draw(); };
+$("fSearch").oninput = e => { UI.search = e.target.value; DRAW.ratings(); };
+$("fPlace").onclick = e => { UI.place = !UI.place; e.currentTarget.classList.toggle("on", UI.place); DRAW.ratings(); };
+$("refresh").onclick = () => { load(); nero(); };
+$("keyin").addEventListener("change", e => { KEY = e.target.value.trim(); try { localStorage.setItem("rating_key", KEY); } catch (x) {} load(); });
+$("rTable").onclick = async e => {
+  const head = e.target.closest(".row.head span[data-s]");
+  if (head) { const k = head.dataset.s; if (UI.sort === k) UI.dir *= -1; else { UI.sort = k; UI.dir = k === "song" ? 1 : -1; } return DRAW.ratings(); }
+  const row = e.target.closest(".row.item"); if (!row) return;
+  const id = +row.dataset.id, r = D.ratings.find(x => x.id === id), act = e.target.dataset.a;
+  if (!act) { if (e.target.closest(".edit")) return; UI.open = UI.open === id ? null : id; return DRAW.ratings(); }
+  try {
+    if (act === "del") {
+      if (!confirm(`Delete the rating for "${r.song}" by ${r.artist}?\nThis cannot be undone.`)) return;
+      await api("POST", { remove: { id } }); D.ratings = D.ratings.filter(x => x.id !== id); UI.open = null;
+    } else {
+      const body = act === "save" ? { note: row.querySelector("textarea").value } : act === "place" ? { placement: !r.placement } : { overall: row.querySelector("input[type=number]").value === "" ? null : +row.querySelector("input[type=number]").value };
+      const j = await api("POST", { update: Object.assign({ id }, body) }); Object.assign(r, j.row);
+    }
+    draw();
+  } catch (x) { alert("That didn't save: " + x.message); }
+};
+$("csv").onclick = () => {
+  const q = v => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+  const lines = [["date", "time", "song", "artist", ...CATS.map(c => c[0]), "overall", "tier", "placement_ready", "note"].join(",")];
+  for (const r of ratingRows()) { const d = new Date(r.first_rated_at);
+    lines.push([q(d.toLocaleDateString()), q(fmtTime(d)), q(r.song), q(r.artist), ...CATS.map(c => q(r.scores?.[c[0]] ?? "")), q(r.overall ?? ""), q(num(r.overall) ? tierName(r.overall) : ""), q(r.placement ? "yes" : ""), q(r.note)].join(",")); }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })); a.download = "stream-ratings.csv"; a.click(); URL.revokeObjectURL(a.href);
+};
+/* keep it fresh while it is open, but never redraw under an open editor */
+setInterval(() => { if (document.hidden || UI.open !== null || document.activeElement === $("fSearch")) return; load(); }, 30000);
+setInterval(nero, 15000);
+load(); nero();
+</script>
+</body>
+</html>

@@ -40,6 +40,8 @@
   #card.blaze { animation: thump .55s ease-in-out infinite; }
   @keyframes thump { 50% { translate: 0 calc(-2 * var(--u)); } }
   #card > *:not(.fx):not(.aura):not(#stamp) { position: relative; }
+  /* numbers stay readable with fire behind them */
+  .overall, .tier, .num, .lab, .song { text-shadow: 0 0 5px #000, 0 2px 4px #000, 0 0 14px rgba(0,0,0,.95); }
   .head { display: flex; align-items: center; gap: calc(12 * var(--u)); }
   .dot { width: calc(12 * var(--u)); height: calc(12 * var(--u)); border-radius: 50%; background: var(--green); animation: blink 1.1s ease-in-out infinite; }
   @keyframes blink { 50% { opacity: .25; transform: scale(.7); } }
@@ -181,7 +183,7 @@ function tick(t) {
     p.life += dt; if (p.life >= p.max) return false;
     const q = p.life / p.max; p.x += (p.vx + Math.sin(p.w + p.life * 7) * 14) * dt; p.y += p.vy * dt; p.vy *= (1 - .6 * dt);
     const rr = p.r * (p.ember ? 1 : 1 - q * .65);
-    ctx.globalAlpha = (p.ember ? 1 - q : (q < .15 ? q / .15 : 1 - q) * (.55 + .35 * h));
+    ctx.globalAlpha = (p.ember ? 1 - q : (q < .15 ? q / .15 : 1 - q) * (.38 + .30 * h));
     ctx.drawImage(set[p.k], p.x - rr, p.y - rr, rr * 2, rr * 2); return true;
   });
   ctx.globalAlpha = 1;

@@ -29,6 +29,17 @@
   body[data-pos="full"] #stamp.on { transform: rotate(4deg) scale(1); }
   body[data-pos$="r"] #card:not(.on) { transform: translateX(calc(80 * var(--u))) scale(.94); }
 
+  /* heat: flames rise inside the panel and an aura pulses around it; both scale with the overall score */
+  .fx { position: absolute; inset: 0; border-radius: calc(16 * var(--u)); overflow: hidden; pointer-events: none; }
+  .fx canvas { position: absolute; left: 0; bottom: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .8s ease; }
+  #card.hot .fx canvas { opacity: 1; }
+  .aura { position: absolute; inset: 0; border-radius: calc(18 * var(--u)); pointer-events: none; opacity: 0;
+          box-shadow: 0 0 calc(22 * var(--u)) calc(6 * var(--u)) var(--heatc, var(--green)), inset 0 0 calc(46 * var(--u)) var(--heatc, var(--green)); }
+  #card.hot .aura { animation: aura var(--beat, 1.6s) ease-in-out infinite; }
+  @keyframes aura { 0%, 100% { opacity: calc(var(--heat, 0) * .25); } 50% { opacity: calc(var(--heat, 0) * .95); } }
+  #card.blaze { animation: thump .55s ease-in-out infinite; }
+  @keyframes thump { 50% { translate: 0 calc(-2 * var(--u)); } }
+  #card > *:not(.fx):not(.aura):not(#stamp) { position: relative; }
   .head { display: flex; align-items: center; gap: calc(12 * var(--u)); }
   .dot { width: calc(12 * var(--u)); height: calc(12 * var(--u)); border-radius: 50%; background: var(--green); animation: blink 1.1s ease-in-out infinite; }
   @keyframes blink { 50% { opacity: .25; transform: scale(.7); } }
@@ -74,6 +85,8 @@
 </head>
 <body data-pos="full">
 <div id="card">
+  <div class="fx"><canvas id="fire"></canvas></div>
+  <div class="aura"></div>
   <div id="stamp">PLACEMENT READY</div>
   <div class="head"><span class="dot"></span><span class="brand">ILLMIND <b>RATING</b></span></div>
   <div class="song" id="song"></div>
@@ -135,6 +148,57 @@ function count(node, from, to, ms, obj) {   // count the number up/down
 }
 function hit(el) { el.classList.remove("hit"); void el.offsetWidth; el.classList.add("hit"); }
 
+/* ---- heat: nothing below 75, a glow from 75, embers from 80, real flames from 90, a full blaze at 95+ ---- */
+const fire = { cv: document.getElementById("fire"), parts: [], heat: 0, gold: false, raf: 0, last: 0, acc: 0 };
+fire.ctx = fire.cv.getContext("2d");
+function sprite(stops) {                       // one soft blob, drawn once and reused for every particle
+  const c = document.createElement("canvas"); c.width = c.height = 64; const g = c.getContext("2d");
+  const r = g.createRadialGradient(32, 32, 0, 32, 32, 32); stops.forEach(([o, col]) => r.addColorStop(o, col));
+  g.fillStyle = r; g.fillRect(0, 0, 64, 64); return c;
+}
+const SPR = {
+  gold: [sprite([[0, "rgba(255,255,220,1)"], [.25, "rgba(255,210,60,.9)"], [.6, "rgba(255,110,10,.45)"], [1, "rgba(255,40,0,0)"]]),
+         sprite([[0, "rgba(255,240,170,1)"], [.3, "rgba(255,150,20,.8)"], [.7, "rgba(230,50,0,.3)"], [1, "rgba(200,0,0,0)"]])],
+  green: [sprite([[0, "rgba(230,255,235,1)"], [.25, "rgba(90,255,130,.85)"], [.6, "rgba(30,220,90,.4)"], [1, "rgba(0,160,60,0)"]]),
+          sprite([[0, "rgba(200,255,215,1)"], [.3, "rgba(57,255,106,.7)"], [.7, "rgba(20,180,80,.25)"], [1, "rgba(0,120,50,0)"]])],
+};
+function sizeFire() { const r = fire.cv.getBoundingClientRect(); fire.cv.width = Math.max(2, Math.round(r.width / 2)); fire.cv.height = Math.max(2, Math.round(r.height / 2)); }
+function tick(t) {
+  const { ctx, cv } = fire, dt = Math.min(.05, (t - fire.last) / 1000 || 0); fire.last = t;
+  const W = cv.width, H = cv.height, h = fire.heat;
+  ctx.clearRect(0, 0, W, H);
+  if (h > 0) {
+    fire.acc += dt * (10 + 170 * h * h);                          // how many flames are born per second
+    while (fire.acc >= 1) { fire.acc -= 1;
+      const ember = Math.random() < .12;
+      fire.parts.push({ x: Math.random() * W, y: H + 6, vx: (Math.random() - .5) * 18, vy: -(H * (.18 + .62 * h)) * (.6 + Math.random() * .8) * (ember ? 1.5 : 1),
+                        r: ember ? 2 + Math.random() * 3 : W * (.035 + .075 * h) * (.6 + Math.random() * .8), life: 0, max: ember ? 1.6 : .7 + Math.random() * .7, ember, k: Math.random() < .5 ? 0 : 1, w: Math.random() * 6.28 });
+    }
+  }
+  ctx.globalCompositeOperation = "lighter";
+  const set = fire.gold ? SPR.gold : SPR.green;
+  fire.parts = fire.parts.filter(p => {
+    p.life += dt; if (p.life >= p.max) return false;
+    const q = p.life / p.max; p.x += (p.vx + Math.sin(p.w + p.life * 7) * 14) * dt; p.y += p.vy * dt; p.vy *= (1 - .6 * dt);
+    const rr = p.r * (p.ember ? 1 : 1 - q * .65);
+    ctx.globalAlpha = (p.ember ? 1 - q : (q < .15 ? q / .15 : 1 - q) * (.55 + .35 * h));
+    ctx.drawImage(set[p.k], p.x - rr, p.y - rr, rr * 2, rr * 2); return true;
+  });
+  ctx.globalAlpha = 1;
+  if (h > 0 || fire.parts.length) fire.raf = requestAnimationFrame(tick); else fire.raf = 0;
+}
+function setHeat(score, visible) {
+  const card = document.getElementById("card");
+  const h = visible && typeof score === "number" ? Math.max(0, Math.min(1, (score - 72) / 26)) : 0;   // 75 -> ~0.1, 90 -> ~0.7, 98+ -> 1
+  fire.heat = score >= 80 ? h : 0;                         // embers start at 80; the aura alone covers 75-79
+  fire.gold = score >= 90;
+  card.classList.toggle("hot", h > 0 && score >= 75); card.classList.toggle("blaze", visible && score >= 95);
+  card.style.setProperty("--heat", h.toFixed(2)); card.style.setProperty("--heatc", score >= 90 ? "var(--gold)" : "var(--green)");
+  card.style.setProperty("--beat", (1.9 - 1.2 * h).toFixed(2) + "s");
+  if (fire.heat > 0 && !fire.raf) { sizeFire(); fire.last = performance.now(); fire.raf = requestAnimationFrame(tick); }
+}
+addEventListener("resize", () => setTimeout(sizeFire, 50));
+
 const ov = { shown: null, anim: 0 };
 function render(s) {
   $("card").classList.toggle("on", !!s.visible);
@@ -161,6 +225,7 @@ function render(s) {
     ov.shown = o;
   }
   $("stamp").classList.toggle("on", !!s.placement && !!s.visible);
+  setHeat(o, !!s.visible);
 }
 
 /* The card also watches Nero itself: the moment Nero moves to a different song than the one that was
@@ -189,7 +254,10 @@ if (qs.has("demo")) {
   render(demo);
   const seq = [["drums", 85], ["melody", 92], ["vocals", "na"], ["mix", 70], ["originality", 55]];
   seq.forEach(([k, v], i) => setTimeout(() => { demo.scores[k] = v; const n = Object.values(demo.scores).filter(x => typeof x === "number");
-    demo.overall = Math.round(n.reduce((a, b) => a + b, 0) / n.length); demo.placement = i === 4; render(demo); }, 1200 + i * 1100));
+    demo.overall = Math.round(n.reduce((a, b) => a + b, 0) / n.length); render(demo); }, 1200 + i * 1100));
+  const hot = [["originality", 88], ["mix", 90], ["drums", 96], ["melody", 98]];
+  hot.forEach(([k, v], i) => setTimeout(() => { demo.scores[k] = v; const n = Object.values(demo.scores).filter(x => typeof x === "number");
+    demo.overall = Math.round(n.reduce((a, b) => a + b, 0) / n.length); demo.placement = i === 3; render(demo); }, 9000 + i * 2200));
 } else { poll(); watchNero(); }
 </script>
 </body>

@@ -26,39 +26,54 @@
 <script>
 /* Stream buddy face. Three drawings of the same helmet (mouth shut / half open / wide open) are swapped
    in time with the loudness of whatever it is saying, so the mouth follows the actual voice.
-   say(url) plays a clip and lip-syncs to it.   ?demo=1 speaks a test line on a loop.   ?debug=1 shows a readout. */
+   say(url) plays a clip and lip-syncs to it.
+   ?demo=1 speaks a test line on a loop   ?debug=1 shows a readout   ?radio=0..1 how much helmet-radio effect (default 0.6)   ?vol=0..1.5 */
 const qs = new URLSearchParams(location.search), $ = id => document.getElementById(id);
 const head = $("head"), m = [$("m0"), $("m1"), $("m2")], glow = $("glow"), dbg = $("dbg");
 if (qs.has("debug")) dbg.style.display = "block";
 
 let AC = null;
 const ac = () => AC || (AC = new (window.AudioContext || window.webkitAudioContext)());
-const talk = { env: null, step: 0.02, t0: 0, dur: 0, audio: null, clock: null, level: 0, open: 0, blocked: false };
+const talk = { env: null, step: 0.02, dur: 0, src: null, t0: 0, clock: null, level: 0, open: 0, blocked: false, id: 0 };
+const RADIO = qs.get("radio") === null ? 0.6 : Math.max(0, Math.min(1, parseFloat(qs.get("radio")) || 0));   // 0 = clean voice, 1 = heavy helmet radio
+const VOL = Math.max(0, Math.min(1.5, parseFloat(qs.get("vol") || "1") || 1));
 
-/* Work out how loud the clip is every 20ms. The mouth is driven from this, in step with playback,
-   so it stays in sync and still moves in browsers that refuse to play sound. */
-async function envelope(url) {
-  const buf = await ac().decodeAudioData(await (await fetch(url)).arrayBuffer());
+/* The voice is played through a "helmet radio" chain: thin the lows and highs, add a little grit. */
+function chain(ctx) {
+  const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 120 + 330 * RADIO;
+  const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 9000 - 5600 * RADIO;
+  const sh = ctx.createWaveShaper(); const n = 1024, c = new Float32Array(n), k = 1 + RADIO * 14;
+  for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(x * k) / Math.tanh(k); } sh.curve = c;
+  const g = ctx.createGain(); g.gain.value = VOL * (1 - RADIO * 0.25);
+  hp.connect(lp); lp.connect(sh); sh.connect(g); g.connect(ctx.destination);
+  return hp;
+}
+/* Work out how loud the clip is every 20ms; the mouth is driven from this, in step with playback. */
+function envelope(buf) {
   const d = buf.getChannelData(0), n = Math.floor(buf.sampleRate * talk.step), out = [];
   for (let i = 0; i < d.length; i += n) { let s = 0; const e = Math.min(d.length, i + n); for (let j = i; j < e; j++) s += d[j] * d[j]; out.push(Math.sqrt(s / (e - i))); }
   const peak = Math.max(0.0001, ...out);
-  return { env: out.map(v => v / peak), dur: buf.duration };
+  return out.map(v => v / peak);
 }
-async function say(url, vol = 1) {
-  stop();
-  const { env, dur } = await envelope(url);
-  const a = new Audio(url); a.volume = vol;
-  talk.env = env; talk.dur = dur; talk.audio = a; talk.clock = null; talk.blocked = false;
-  try { await a.play(); } catch (e) { talk.blocked = true; talk.clock = performance.now(); }      // no sound allowed here: animate anyway
-  return new Promise(res => { const done = () => { if (talk.audio === a) stop(); res(); }; a.onended = done; if (talk.blocked) setTimeout(done, dur * 1000 + 100); });
+async function say(url) {
+  const id = ++talk.id;
+  const ctx = ac();
+  const buf = await ctx.decodeAudioData(await (await fetch(url)).arrayBuffer());
+  if (id !== talk.id) return;                       // a newer line (or a stop) arrived while this one was loading
+  stop(true);
+  try { await ctx.resume(); } catch (e) {}
+  talk.env = envelope(buf); talk.dur = buf.duration; talk.blocked = ctx.state !== "running";
+  if (talk.blocked) talk.clock = performance.now();        // ordinary browsers refuse sound until clicked: animate anyway
+  else { const src = ctx.createBufferSource(); src.buffer = buf; src.connect(chain(ctx)); src.start(); talk.src = src; talk.t0 = ctx.currentTime; }
+  return new Promise(res => setTimeout(() => { if (id === talk.id) stop(true); res(); }, buf.duration * 1000 + 80));
 }
-function stop() { if (talk.audio) { try { talk.audio.pause(); } catch (e) {} } talk.audio = null; talk.env = null; }
+function stop(keepId) { if (!keepId) talk.id++; if (talk.src) { try { talk.src.stop(); } catch (e) {} } talk.src = null; talk.env = null; }
 
 function frame(now) {
   // 1. how loud is the voice right now?
   let target = 0;
   if (talk.env) {
-    const t = talk.blocked ? (now - talk.clock) / 1000 : talk.audio.currentTime;
+    const t = talk.blocked ? (now - talk.clock) / 1000 : AC.currentTime - talk.t0;
     target = talk.env[Math.min(talk.env.length - 1, Math.max(0, Math.floor(t / talk.step)))] || 0;
   }
   // 2. mouths open fast and close a little slower, like a real jaw
@@ -78,7 +93,25 @@ function frame(now) {
 requestAnimationFrame(frame);
 window.buddy = { say, stop, talk };
 
+/* ---- live lines: the brain's replies arrive here (same channel as the rating card and sound pads) ---- */
+const STATE_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-rating";
+let budN = null;
+async function poll() {
+  let pause = 30;
+  try {
+    const j = await (await fetch(STATE_URL + "?bud=" + (budN ?? -1) + "&wait=" + (budN === null ? 0 : 20) + "&t=" + Date.now(), { cache: "no-store" })).json();
+    if (!j.ok) throw new Error(j.error || "bad reply");
+    if (budN === null) budN = j.buddy_n;                    // first look: do not replay old lines
+    else if (j.buddy_n !== budN) {
+      const fresh = (j.buddy || []).filter(e => e.n > budN); budN = j.buddy_n;
+      const last = fresh[fresh.length - 1];
+      if (last) { if (last.stop) stop(); else say(last.url).catch(() => {}); }
+    }
+  } catch (e) { pause = 2000; }
+  setTimeout(poll, pause);
+}
 if (qs.has("demo")) (async function loop() { try { await say("buddy/demo.mp3"); } catch (e) { dbg.textContent = "demo failed: " + e; } setTimeout(loop, 2500); })();
+else poll();
 </script>
 </body>
 </html>

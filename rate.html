@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RATE">
+<meta name="theme-color" content="#060a07">
+<title>Rate</title>
+<style>
+  :root { --green: #39ff6a; --gold: #ffd700; --orange: #f97316; --red: #ff4d4d; --ink: #eafff0; --dim: #6f8a78; --panel: #0c140f; --line: #1d2e23; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: #060a07; color: var(--ink); font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  body { min-height: 100dvh; padding: 12px 12px calc(150px + env(safe-area-inset-bottom)); max-width: 760px; margin: 0 auto; }
+  h1 { margin: 0; font: 400 26px/1 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; letter-spacing: .06em; color: var(--green); }
+  h1 b { color: var(--ink); font-weight: 400; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .pill { font-size: 12px; letter-spacing: .12em; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); white-space: nowrap; }
+  .pill.air { color: #06110a; background: var(--green); border-color: var(--green); font-weight: 700; }
+  .pill.err { color: var(--red); border-color: var(--red); }
+
+  .now { margin-top: 10px; padding: 9px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  .now small { display: none; }
+  .now input { width: 100%; background: transparent; border: 0; outline: 0; color: var(--ink); font: 400 21px/1.15 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; letter-spacing: .02em; padding: 0; text-overflow: ellipsis; }
+  .now input.artist { font-size: 12px; line-height: 1.3; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; margin-top: 4px; }
+  .now .sync { margin-top: 4px; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--dim); }
+  .now .sync span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .link { background: none; border: 0; color: var(--green); font: inherit; padding: 4px 0; white-space: nowrap; cursor: pointer; text-decoration: underline; }
+
+  .cat { margin-top: 8px; padding: 9px 10px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  .cat .hd { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
+  .cat .name { flex: 1; }
+  .cat .name { font-size: 14px; letter-spacing: .12em; }
+  .cat .val { font: 400 28px/1 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; color: var(--c, var(--dim)); min-width: 52px; text-align: right; }
+  .blocks { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; touch-action: none; user-select: none; }
+  .blk { height: 38px; border-radius: 6px; background: #14201a; border: 1px solid var(--line); transition: transform .12s ease, background-color .15s ease; }
+  .blk.on { background: var(--c, var(--green)); border-color: transparent; }
+  .blk.pop { transform: scaleY(1.18); }
+  .tools { display: flex; gap: 5px; }
+  .mini { height: 30px; padding: 0 9px; border-radius: 7px; border: 1px solid var(--line); background: #101a14; color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; }
+  .mini:active { transform: scale(.96); } .mini.sel { background: var(--dim); color: #06110a; border-color: var(--dim); }
+  .cat.na .blocks { opacity: .25; pointer-events: none; }
+
+  .overall { margin-top: 10px; padding: 14px; border-radius: 12px; border: 1px dashed rgba(57,255,106,.45); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .overall .big { font: 400 64px/.9 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; color: var(--c, var(--dim)); }
+  .overall .tier { font: 400 22px/1 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; letter-spacing: .05em; color: var(--c, var(--dim)); margin-top: 6px; }
+  .overall small { font-size: 11px; letter-spacing: .16em; color: var(--dim); }
+  .stack { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+  .toggle { height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: #101a14; color: var(--ink); font: inherit; font-size: 13px; letter-spacing: .08em; cursor: pointer; }
+  .toggle.sel { background: var(--gold); color: #1a1400; border-color: var(--gold); font-weight: 700; }
+
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(180deg, rgba(6,10,7,0), #060a07 28%); }
+  .bar .in { max-width: 732px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .live { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: center; gap: 10px; font-size: 12px; letter-spacing: .16em; color: var(--dim); }
+  .live b { font: 400 30px/1 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; color: var(--c, var(--dim)); }
+  .live i { font: 400 18px/1 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; font-style: normal; letter-spacing: .05em; color: var(--c, var(--dim)); }
+  .btn { height: 58px; border-radius: 14px; border: 2px solid var(--green); background: transparent; color: var(--green); font: 400 clamp(17px, 5vw, 24px)/1 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; letter-spacing: .05em; cursor: pointer; white-space: nowrap; }
+  .btn:active { transform: scale(.97); }
+  .btn.show.on { background: var(--green); color: #06110a; }
+  .btn.next { border-color: var(--ink); color: var(--ink); }
+  .hint { margin-top: 14px; font-size: 12px; line-height: 1.5; color: var(--dim); }
+  #gate { margin-top: 30px; padding: 16px; border: 1px solid var(--red); border-radius: 12px; display: none; }
+  #gate input { width: 100%; height: 44px; margin-top: 10px; background: #101a14; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); font: inherit; padding: 0 10px; }
+  @media (min-width: 700px) { .blk { height: 50px; } .mini { height: 34px; font-size: 13px; } }
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>ILLMIND <b>RATING</b></h1>
+  <span class="pill" id="status">CONNECTING…</span>
+</div>
+
+<div id="gate">
+  This control page needs its private key. Open it from your saved control link, or paste the key here.
+  <input id="keyin" placeholder="control key" autocomplete="off">
+</div>
+
+<div id="app">
+  <div class="now">
+    <small>NOW PLAYING</small>
+    <input id="song" placeholder="Song title" autocomplete="off">
+    <input id="artist" class="artist" placeholder="Artist" autocomplete="off">
+    <div class="sync"><span id="neroLine">Nero: checking…</span><button class="link" id="pull">Pull from Nero</button></div>
+  </div>
+  <div id="cats"></div>
+  <div class="overall" id="ovBox">
+    <div><small>OVERALL <span id="ovMode">(AVERAGE)</span></small><div class="big" id="ovNum">—</div><div class="tier" id="ovTier">—</div></div>
+    <div class="stack">
+      <button class="toggle" id="placement">PLACEMENT READY</button>
+      <div style="display:flex;gap:8px"><button class="mini" id="ovDn" style="width:52px;flex:none">−5</button><button class="mini" id="ovUp" style="width:52px;flex:none">+5</button><button class="mini" id="ovAuto" style="width:64px;flex:none">AUTO</button></div>
+    </div>
+  </div>
+  <label class="hint" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="autonext" checked> When Nero moves to the next song, start a fresh rating automatically</label>
+  <div class="hint">Tap or drag across a bar to rate it. Changes go to the stream instantly while the card is showing. Keys on desktop: S show/hide, N next song.</div>
+</div>
+
+<div class="bar"><div class="in">
+  <div class="live" id="liveLine">OVERALL <b id="liveNum">—</b> <i id="liveTier"></i></div>
+  <button class="btn show" id="show">SHOW ON STREAM</button>
+  <button class="btn next" id="next">NEXT SONG ▶</button>
+</div></div>
+
+<script>
+/* Rating control page. Everything you tap here is sent to the stream overlay (rating.html). */
+const STATE_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-rating";
+const FEED_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-feed";
+const CATS = [["drums", "DRUMS"], ["melody", "MELODY"], ["vocals", "VOCALS"], ["mix", "MIX"], ["originality", "ORIGINALITY"]];
+const $ = id => document.getElementById(id);
+const colour = s => s >= 90 ? "var(--gold)" : s >= 75 ? "var(--green)" : s >= 60 ? "var(--orange)" : "var(--red)";
+const tierName = s => s >= 90 ? "ELITE" : s >= 75 ? "STRONG" : s >= 60 ? "GETTING THERE" : "KEEP WORKING";
+const blank = () => ({ visible: false, song: "", artist: "", songId: "", scores: { drums: null, melody: null, vocals: null, mix: null, originality: null }, overall: null, overallManual: false, placement: false });
+
+/* ---- key: comes from the link (#k=...) once, then remembered on this device ---- */
+let KEY = "";
+try { const m = location.hash.match(/k=([^&]+)/); if (m) { KEY = decodeURIComponent(m[1]); localStorage.setItem("rating_key", KEY); } else KEY = localStorage.getItem("rating_key") || ""; } catch (e) {}
+function gate(on) { $("gate").style.display = on ? "block" : "none"; }
+$("keyin").addEventListener("change", e => { KEY = e.target.value.trim(); try { localStorage.setItem("rating_key", KEY); } catch (x) {} gate(false); push(); });
+
+let S = blank(), nero = null, dirty = false, timer = 0, sending = false;
+const status = (t, cls) => { const el = $("status"); el.textContent = t; el.className = "pill " + (cls || ""); };
+
+/* ---- build the five bars ---- */
+const ui = {};
+for (const [k, label] of CATS) {
+  const c = document.createElement("div"); c.className = "cat";
+  c.innerHTML = `<div class="hd"><span class="name">${label}</span><span class="tools">${k === "vocals" ? '<button class="mini" data-a="na">N/A</button>' : ""}<button class="mini" data-a="dn">−5</button><button class="mini" data-a="up">+5</button><button class="mini" data-a="clr">✕</button></span><span class="val">—</span></div>
+    <div class="blocks">${'<div class="blk"></div>'.repeat(10)}</div>`;
+  $("cats").appendChild(c);
+  const blocks = c.querySelector(".blocks"), blks = [...c.querySelectorAll(".blk")];
+  ui[k] = { c, blks, val: c.querySelector(".val"), na: c.querySelector('[data-a="na"]') };
+  const fromPoint = x => { const r = blocks.getBoundingClientRect(); return Math.max(1, Math.min(10, Math.ceil((x - r.left) / r.width * 10))) * 10; };
+  let down = false;
+  blocks.addEventListener("pointerdown", e => { down = true; blocks.setPointerCapture(e.pointerId); set(k, fromPoint(e.clientX)); });
+  blocks.addEventListener("pointermove", e => { if (down) set(k, fromPoint(e.clientX)); });
+  const up = () => { down = false; }; blocks.addEventListener("pointerup", up); blocks.addEventListener("pointercancel", up);
+  c.querySelector(".tools").addEventListener("click", e => {
+    const a = e.target.dataset.a; if (!a) return; const v = S.scores[k];
+    if (a === "clr") set(k, null);
+    else if (a === "na") set(k, v === "na" ? null : "na");
+    else set(k, Math.max(0, Math.min(100, (typeof v === "number" ? v : 50) + (a === "up" ? 5 : -5))));
+  });
+}
+function set(k, v) { if (S.scores[k] === v) return; S.scores[k] = v; recalc(); paint(); push(); }
+function recalc() {
+  if (S.overallManual) return;
+  const n = Object.values(S.scores).filter(x => typeof x === "number");
+  S.overall = n.length ? Math.round(n.reduce((a, b) => a + b, 0) / n.length) : null;
+}
+function paint() {
+  for (const [k] of CATS) {
+    const v = S.scores[k], u = ui[k], n = typeof v === "number" ? v : 0;
+    u.c.classList.toggle("na", v === "na"); if (u.na) u.na.classList.toggle("sel", v === "na");
+    u.c.style.setProperty("--c", typeof v === "number" ? colour(v) : "var(--dim)");
+    u.blks.forEach((b, i) => { const on = n >= (i + 1) * 10 - 4; if (on && !b.classList.contains("on")) { b.classList.add("pop"); setTimeout(() => b.classList.remove("pop"), 130); } b.classList.toggle("on", on); });
+    u.val.textContent = v === "na" ? "N/A" : typeof v === "number" ? v : "—";
+  }
+  const o = S.overall, box = $("ovBox");
+  box.style.setProperty("--c", typeof o === "number" ? colour(o) : "var(--dim)");
+  $("ovNum").textContent = typeof o === "number" ? o : "—"; $("ovTier").textContent = typeof o === "number" ? tierName(o) : "—";
+  $("ovMode").textContent = S.overallManual ? "(YOUR CALL)" : "(AVERAGE)";
+  $("placement").classList.toggle("sel", S.placement);
+  const sh = $("show"); sh.classList.toggle("on", S.visible); sh.textContent = S.visible ? "ON AIR · HIDE" : "SHOW ON STREAM";
+  $("liveLine").style.setProperty("--c", typeof o === "number" ? colour(o) : "var(--dim)"); $("liveNum").textContent = typeof o === "number" ? o : "—"; $("liveTier").textContent = typeof o === "number" ? tierName(o) : "";
+  if ($("song") !== document.activeElement) $("song").value = S.song;
+  if ($("artist") !== document.activeElement) $("artist").value = S.artist;
+}
+
+/* ---- send to the overlay (small debounce so a drag is one update, not fifty) ---- */
+function push() { dirty = true; clearTimeout(timer); timer = setTimeout(flush, 140); }
+async function flush() {
+  if (sending) return push(); if (!KEY) return gate(true);
+  sending = true; dirty = false;
+  try {
+    const r = await fetch(STATE_URL, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ state: S }) });
+    const j = await r.json();
+    if (r.status === 401) { status("WRONG KEY", "err"); gate(true); }
+    else if (!j.ok) status("SEND FAILED", "err");
+    else status(S.visible ? "ON AIR" : "READY", S.visible ? "air" : "");
+  } catch (e) { status("OFFLINE", "err"); dirty = true; }
+  sending = false; if (dirty) push();
+}
+
+/* ---- controls ---- */
+$("show").onclick = () => { S.visible = !S.visible; paint(); push(); };
+$("placement").onclick = () => { S.placement = !S.placement; paint(); push(); };
+$("ovUp").onclick = () => { S.overallManual = true; S.overall = Math.min(100, (S.overall ?? 50) + 5); paint(); push(); };
+$("ovDn").onclick = () => { S.overallManual = true; S.overall = Math.max(0, (S.overall ?? 50) - 5); paint(); push(); };
+$("ovAuto").onclick = () => { S.overallManual = false; recalc(); paint(); push(); };
+$("song").oninput = e => { S.song = e.target.value; push(); };
+$("artist").oninput = e => { S.artist = e.target.value; push(); };
+function useNero() { if (nero) { S.song = nero.song || ""; S.artist = nero.name || ""; S.songId = nero.id || ""; } }
+function nextSong() {                     // hide, wipe the scores, load whatever Nero is playing now
+  S = blank(); useNero(); paint(); push();
+}
+$("next").onclick = nextSong;
+$("pull").onclick = () => { useNero(); paint(); push(); };
+addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  if (e.key === "s" || e.key === "S") $("show").click();
+  if (e.key === "n" || e.key === "N") $("next").click();
+});
+try { $("autonext").checked = localStorage.getItem("rating_autonext") !== "0"; } catch (e) {}
+$("autonext").onchange = e => { try { localStorage.setItem("rating_autonext", e.target.checked ? "1" : "0"); } catch (x) {} };
+
+/* ---- watch Nero for the song changing ---- */
+async function watchNero() {
+  try {
+    const j = await (await fetch(FEED_URL + "?t=" + Date.now(), { cache: "no-store" })).json();
+    const cur = j.live ? j.current : null;
+    $("neroLine").textContent = cur ? `Nero: ${cur.song} — ${cur.name}` : "Nero: no song playing";
+    const changed = cur && nero && cur.id !== nero.id;
+    nero = cur;
+    if (cur && !S.songId && !S.song) { useNero(); paint(); push(); }                 // first load with nothing set
+    else if (changed && $("autonext").checked) nextSong();
+  } catch (e) { $("neroLine").textContent = "Nero: can't reach the feed"; }
+  setTimeout(watchNero, 3000);
+}
+
+/* ---- start: pick up whatever is already on the overlay so a reload never wipes a rating ---- */
+(async () => {
+  if (!KEY) gate(true);
+  try {
+    const j = await (await fetch(STATE_URL + "?t=" + Date.now(), { cache: "no-store" })).json();
+    if (j.ok && j.state && j.state.scores) S = Object.assign(blank(), j.state, { scores: Object.assign(blank().scores, j.state.scores) });
+    status(S.visible ? "ON AIR" : "READY", S.visible ? "air" : "");
+  } catch (e) { status("OFFLINE", "err"); }
+  paint(); watchNero();
+})();
+</script>
+</body>
+</html>

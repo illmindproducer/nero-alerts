@@ -23,6 +23,10 @@
   body[data-pos="tl"] #card { left: calc(48 * var(--u)); top: calc(48 * var(--u)); }
   body[data-pos="tr"] #card { right: calc(48 * var(--u)); top: calc(48 * var(--u)); }
   body[data-pos="c"]  #card { left: 50%; top: 50%; margin: calc(-300 * var(--u)) 0 0 calc(-300 * var(--u)); }
+  body[data-pos="full"] #card { left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.9); }
+  body[data-pos="full"] #card.on { transform: translate(-50%, -50%); }
+  body[data-pos="full"] #stamp { right: calc(14 * var(--u)); top: calc(10 * var(--u)); transform: rotate(4deg) scale(2.2); }
+  body[data-pos="full"] #stamp.on { transform: rotate(4deg) scale(1); }
   body[data-pos$="r"] #card:not(.on) { transform: translateX(calc(80 * var(--u))) scale(.94); }
 
   .head { display: flex; align-items: center; gap: calc(12 * var(--u)); }
@@ -68,7 +72,7 @@
   #stamp.on { transform: rotate(8deg) scale(1); opacity: 1; }
 </style>
 </head>
-<body data-pos="bl">
+<body data-pos="full">
 <div id="card">
   <div id="stamp">PLACEMENT READY</div>
   <div class="head"><span class="dot"></span><span class="brand">ILLMIND <b>RATING</b></span></div>
@@ -83,20 +87,30 @@
 </div>
 <script>
 /* Rating overlay — shows whatever the control page (rate.html) sets. Read-only; no key needed.
-   URL options: ?pos=bl|br|tl|tr|c   position (default bl = bottom left)
-                ?scale=1.2           make the card bigger or smaller
+   By default the card fills the whole page, so the browser source IS the card: size and place it in Streamlabs.
+   URL options: ?pos=bl|br|tl|tr|c   old corner mode on a 1920x1080 canvas
+                ?scale=0.9           shrink or grow the card inside the page
                 ?demo=1              show sample ratings (for placing it in Streamlabs) */
 const STATE_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-rating";
 const CATS = [["drums", "DRUMS"], ["melody", "MELODY"], ["vocals", "VOCALS"], ["mix", "MIX"], ["originality", "ORIGINALITY"]];
 const qs = new URLSearchParams(location.search);
-document.body.dataset.pos = qs.get("pos") || "bl";
+document.body.dataset.pos = qs.get("pos") || "full";
 const SCALE = parseFloat(qs.get("scale") || "1") || 1;
-function fit() {                      // one unit = one pixel on a 1920x1080 canvas (or 1080-wide when vertical)
-  const w = innerWidth, h = innerHeight;
-  const u = (w >= h ? Math.min(w / 1920, h / 1080) : w / 1080 * 1.5) * SCALE;
-  document.documentElement.style.setProperty("--u", u + "px");
+let CARD_H = 0;                       // the card's natural height in design units, measured once
+function fit() {
+  const w = innerWidth, h = innerHeight, root = document.documentElement.style;
+  let u;
+  if (document.body.dataset.pos === "full") {
+    // FULL SCREEN (default): the card fills the whole browser source, so you size and place it in Streamlabs.
+    if (!CARD_H) { root.setProperty("--u", "1px"); CARD_H = document.getElementById("card").offsetHeight; }
+    u = Math.min(w / (600 + 44), h / (CARD_H + 44)) * SCALE;       // small margin so the glow is not cut off
+  } else {
+    // corner mode (?pos=bl|br|tl|tr|c): one unit = one pixel on a 1920x1080 canvas
+    u = (w >= h ? Math.min(w / 1920, h / 1080) : w / 1080 * 1.5) * SCALE;
+  }
+  root.setProperty("--u", u + "px");
 }
-fit(); addEventListener("resize", fit);
+addEventListener("resize", fit);
 
 // same colour bands as The Feedback Loop: 90+ gold, 75+ green, 60+ orange, below red
 const colour = s => s >= 90 ? "var(--gold)" : s >= 75 ? "var(--green)" : s >= 60 ? "var(--orange)" : "var(--red)";
@@ -110,6 +124,7 @@ for (const [k, label] of CATS) {
   $("rows").appendChild(r);
   rows[k] = { el: r, fill: r.querySelector(".fill"), num: r.querySelector(".num"), shown: null, anim: 0 };
 }
+fit(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { CARD_H = 0; fit(); });
 function count(node, from, to, ms, obj) {   // count the number up/down
   cancelAnimationFrame(obj.anim); const t0 = performance.now();
   const step = t => { const p = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - p, 3);

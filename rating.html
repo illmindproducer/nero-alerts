@@ -256,8 +256,13 @@ function playSfx(ev) {
   if (!SFX_IDS.includes(ev.id)) return;
   const a = new Audio("sfx/" + ev.id + ".mp3"); a.volume = Math.max(0, Math.min(1, ev.vol ?? 1));
   sfxLive.add(a); a.onended = a.onerror = () => sfxLive.delete(a);
-  a.play().catch(() => sfxLive.delete(a));        // ordinary browsers block sound until clicked; Streamlabs does not
+  a.play().then(() => sfxNote(ev.id + ": PLAYING (if you hear nothing, it is this source's audio setting in Streamlabs)"))
+          .catch(e => { sfxLive.delete(a); sfxNote(ev.id + ": BLOCKED by the browser - " + e.name); });   // ordinary browsers block sound until clicked; Streamlabs does not
 }
+/* ?sfxdebug=1 shows a small readout of every sound-pad press this page receives, to tell "not arriving" from "arriving but silent" */
+const sfxDbg = qs.has("sfxdebug") ? document.body.appendChild(Object.assign(document.createElement("div"), { style: "position:fixed;left:8px;top:8px;z-index:9;font:14px ui-monospace,Menlo,monospace;color:#7dffa6;background:rgba(0,0,0,.85);padding:8px 10px;border-radius:6px;white-space:pre", textContent: "SFX debug: waiting for a pad press…" })) : null;
+let sfxCount = 0;
+function sfxNote(t) { if (sfxDbg) sfxDbg.textContent = "SFX debug  (" + (++sfxCount) + " received)\n" + t; }
 let sfxN = null;
 async function poll() {
   let pause = 30;

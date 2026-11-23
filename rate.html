@@ -116,7 +116,7 @@
     </div>
   </div>
   <div class="sfx">
-    <h2>SOUND EFFECTS <button id="sfxStop">STOP ALL</button></h2>
+    <h2>SOUND EFFECTS <span style="display:flex;gap:6px"><button id="sfxGfx">GRAPHICS ON</button><button id="sfxStop">STOP ALL</button></span></h2>
     <div class="pads" id="pads"></div>
     <div class="vol">SFX VOLUME <input type="range" id="sfxVol" min="0" max="100" value="100"> <span id="sfxVolN">100</span></div>
   </div>
@@ -231,7 +231,7 @@ async function fireSfx(id, el) {
   if (!KEY) return gate(true);
   if (el) { el.classList.remove("bad"); el.classList.add("hit"); setTimeout(() => el.classList.remove("hit"), 260); }
   try {
-    const r = await fetch(STATE_URL, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ sfx: { id, vol: (+$("sfxVol").value) / 100 } }) });
+    const r = await fetch(STATE_URL, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ sfx: { id: id === "stop" || GFX ? id : id + "_s", vol: (+$("sfxVol").value) / 100 } }) });
     const j = await r.json(); if (!j.ok) throw new Error(j.error);
   } catch (e) { if (el) { el.classList.add("bad"); setTimeout(() => el.classList.remove("bad"), 700); } status("SFX FAILED", "err"); }
 }
@@ -240,6 +240,11 @@ for (const [id, label, emoji] of PADS) {
   b.addEventListener("click", () => fireSfx(id, b)); $("pads").appendChild(b);
 }
 $("sfxStop").onclick = () => fireSfx("stop");
+/* GRAPHICS ON/OFF: whether a pad also shows its animated graphic on stream, or only plays the sound */
+let GFX = true; try { GFX = localStorage.getItem("rating_sfxgfx") !== "0"; } catch (e) {}
+const drawGfx = () => { const b = $("sfxGfx"); b.textContent = "GRAPHICS " + (GFX ? "ON" : "OFF"); b.style.borderColor = b.style.color = GFX ? "var(--green)" : "#777"; };
+$("sfxGfx").onclick = () => { GFX = !GFX; try { localStorage.setItem("rating_sfxgfx", GFX ? "1" : "0"); } catch (e) {} drawGfx(); };
+drawGfx();
 try { $("sfxVol").value = localStorage.getItem("rating_sfxvol") || "100"; } catch (e) {} $("sfxVolN").textContent = $("sfxVol").value;
 $("sfxVol").oninput = e => { $("sfxVolN").textContent = e.target.value; try { localStorage.setItem("rating_sfxvol", e.target.value); } catch (x) {} };
 

@@ -100,6 +100,7 @@
     <div class="overall" id="overall">—</div>
   </div>
 </div>
+<script src="fx.js?v=2"></script>
 <script>
 /* Rating overlay — shows whatever the control page (rate.html) sets. Read-only; no key needed.
    By default the card fills the whole page, so the browser source IS the card: size and place it in Streamlabs.
@@ -251,6 +252,7 @@ const draw = () => render(Object.assign({}, last, { visible: !!last.visible && !
 const SFX_IDS = ["fah", "airhorn", "boom", "bruh", "trombone", "crickets", "scratch", "rimshot", "explosion", "gunshots", "laugh", "applause", "oooh", "chaching", "buzzer", "siren"];
 /* Played with the Web Audio engine from plain WAV files. (The first version used MP3 through an <audio>
    element, which stayed silent inside Streamlabs; WAV through Web Audio is the same path the buddy's voice uses.) */
+const FXON = qs.get("fx") !== "0";                       // ?fx=0 = sounds only, no graphics from this source
 let SAC = null;
 const sac = () => SAC || (SAC = new (window.AudioContext || window.webkitAudioContext)());
 const sfxBuf = {}, sfxLive = new Set();
@@ -260,8 +262,11 @@ async function loadSfx(id) {
 }
 SFX_IDS.forEach(loadSfx);                                  // download and decode everything up front
 async function playSfx(ev) {
-  if (ev.id === "stop") { sfxLive.forEach(n => { try { n.stop(); } catch (e) {} }); sfxLive.clear(); return; }
+  if (ev.id === "stop") { sfxLive.forEach(n => { try { n.stop(); } catch (e) {} }); sfxLive.clear(); if (window.SFXFX) SFXFX.stop(); return; }
+  const quiet = /_s$/.test(ev.id);                         // "boom_s" = sound only (graphics switched off on the control page)
+  ev = Object.assign({}, ev, { id: ev.id.replace(/_s$/, "") });
   if (!SFX_IDS.includes(ev.id)) return;
+  if (FXON && !quiet && window.SFXFX) SFXFX.fire(ev.id);    // the animated graphic for this pad (fx.js)
   const ctx = sac(); try { await ctx.resume(); } catch (e) {}
   if (!sfxBuf[ev.id]) await loadSfx(ev.id);
   if (!sfxBuf[ev.id]) return;

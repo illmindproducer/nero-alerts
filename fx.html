@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>SFX Graphics</title>
+<style>html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }</style>
+</head>
+<body>
+<script src="fx.js?v=2"></script>
+<script>
+/* Sound-pad graphics on their own, with no sound: an optional separate full-screen browser source.
+   (The rating source already shows these. Use this page only if the rating source is cropped or small,
+   and add ?fx=0 to the rating link so they are not drawn twice.)
+   ?test=boom plays one on a loop   ?demo=1 plays all sixteen in turn */
+const qs = new URLSearchParams(location.search);
+const STATE_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-rating";
+let sfxN = null;
+async function poll() {
+  let pause = 30;
+  try {
+    const j = await (await fetch(STATE_URL + "?sfx=" + (sfxN ?? -1) + "&wait=" + (sfxN === null ? 0 : 20) + "&t=" + Date.now(), { cache: "no-store" })).json();
+    if (!j.ok) throw new Error(j.error || "bad reply");
+    if (sfxN === null) sfxN = j.sfx_n;
+    else if (j.sfx_n !== sfxN) {
+      (j.sfx || []).filter(e => e.n > sfxN).forEach(e => { if (e.id === "stop") SFXFX.stop(); else if (!/_s$/.test(e.id)) SFXFX.fire(e.id); });
+      sfxN = j.sfx_n;
+    }
+  } catch (e) { pause = 2000; }
+  setTimeout(poll, pause);
+}
+if (qs.get("test")) { const go = () => SFXFX.fire(qs.get("test")); go(); setInterval(go, 5500); }
+else if (qs.has("demo")) { let i = 0; const go = () => SFXFX.fire(SFXFX.ids[i++ % SFXFX.ids.length]); go(); setInterval(go, 5200); }
+else poll();
+</script>
+</body>
+</html>

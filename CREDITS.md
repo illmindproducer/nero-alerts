@@ -19,3 +19,6 @@ Sound-effect pads in `sfx/`. All of the recordings below were released by their 
 `crickets.mp3`, `explosion.mp3`, `applause.mp3` and `chaching.mp3` are original generated sounds.
 
 `fah.mp3` is a clip supplied by the site owner.
+
+## Sound-pad graphics (`fx/`)
+Original sticker illustrations generated for this project; animated in `fx.js`.

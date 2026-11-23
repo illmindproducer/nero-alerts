@@ -16,4 +16,6 @@ Sound-effect pads in `sfx/`. All of the recordings below were released by their 
 | `gunshots.mp3` | Machine Gun Shots Fast | ShawnyBoy | https://freesound.org/people/ShawnyBoy/sounds/165393/ |
 | `laugh.mp3` | Small Crowd Laughing | snakebarney | https://freesound.org/people/snakebarney/sounds/138112/ |
 
-`crickets.mp3`, `explosion.mp3`, `applause.mp3`, `chaching.mp3` and `fah.mp3` are original generated sounds.
+`crickets.mp3`, `explosion.mp3`, `applause.mp3` and `chaching.mp3` are original generated sounds.
+
+`fah.mp3` is a clip supplied by the site owner.

@@ -249,26 +249,38 @@ const draw = () => render(Object.assign({}, last, { visible: !!last.visible && !
 /* ---- sound effects: fired from the control page, played here so they go out on the stream.
         They are independent of the rating card: they play whether the card is showing or hidden. ---- */
 const SFX_IDS = ["fah", "airhorn", "boom", "bruh", "trombone", "crickets", "scratch", "rimshot", "explosion", "gunshots", "laugh", "applause", "oooh", "chaching", "buzzer", "siren"];
-const sfxWarm = {}, sfxLive = new Set();
-SFX_IDS.forEach(id => { const a = new Audio("sfx/" + id + ".mp3"); a.preload = "auto"; sfxWarm[id] = a; });   // download up front
-function playSfx(ev) {
-  if (ev.id === "stop") { sfxLive.forEach(a => { try { a.pause(); } catch (e) {} }); sfxLive.clear(); return; }
+/* Played with the Web Audio engine from plain WAV files. (The first version used MP3 through an <audio>
+   element, which stayed silent inside Streamlabs; WAV through Web Audio is the same path the buddy's voice uses.) */
+let SAC = null;
+const sac = () => SAC || (SAC = new (window.AudioContext || window.webkitAudioContext)());
+const sfxBuf = {}, sfxLive = new Set();
+async function loadSfx(id) {
+  try { sfxBuf[id] = await sac().decodeAudioData(await (await fetch("sfx/" + id + ".wav")).arrayBuffer()); }
+  catch (e) { sfxNote(id + ": could not load - " + e.message); }
+}
+SFX_IDS.forEach(loadSfx);                                  // download and decode everything up front
+async function playSfx(ev) {
+  if (ev.id === "stop") { sfxLive.forEach(n => { try { n.stop(); } catch (e) {} }); sfxLive.clear(); return; }
   if (!SFX_IDS.includes(ev.id)) return;
-  const a = new Audio("sfx/" + ev.id + ".mp3"); a.volume = Math.max(0, Math.min(1, ev.vol ?? 1));
-  sfxLive.add(a); a.onended = a.onerror = () => sfxLive.delete(a);
-  a.play().then(() => sfxNote(ev.id + ": PLAYING (if you hear nothing, it is this source's audio setting in Streamlabs)"))
-          .catch(e => { sfxLive.delete(a); sfxNote(ev.id + ": BLOCKED by the browser - " + e.name); });   // ordinary browsers block sound until clicked; Streamlabs does not
+  const ctx = sac(); try { await ctx.resume(); } catch (e) {}
+  if (!sfxBuf[ev.id]) await loadSfx(ev.id);
+  if (!sfxBuf[ev.id]) return;
+  const src = ctx.createBufferSource(), g = ctx.createGain();
+  src.buffer = sfxBuf[ev.id]; g.gain.value = Math.max(0, Math.min(1, ev.vol ?? 1)); src.connect(g); g.connect(ctx.destination);
+  sfxLive.add(src); src.onended = () => sfxLive.delete(src); src.start();
+  sfxNote(ev.id + (ctx.state === "running" ? ": PLAYING" : ": BLOCKED (this browser needs a click first; Streamlabs does not)"));
 }
 /* ?sfxdebug=1 shows a small readout of every sound-pad press this page receives, to tell "not arriving" from "arriving but silent" */
 const sfxDbg = qs.has("sfxdebug") ? document.body.appendChild(Object.assign(document.createElement("div"), { style: "position:fixed;left:8px;top:8px;z-index:9;font:14px ui-monospace,Menlo,monospace;color:#7dffa6;background:rgba(0,0,0,.85);padding:8px 10px;border-radius:6px;white-space:pre", textContent: "SFX debug: waiting for a pad press…" })) : null;
 let sfxCount = 0;
-function sfxNote(t) { if (sfxDbg) sfxDbg.textContent = "SFX debug  (" + (++sfxCount) + " received)\n" + t; }
+let sfxLast = "none";
+function sfxNote(t) { sfxLast = t.slice(0, 60); if (sfxDbg) sfxDbg.textContent = "SFX debug  (" + (++sfxCount) + " received)\n" + t; }
 let sfxN = null;
 async function poll() {
   let pause = 30;
   try {
     // long-poll: the server holds this request and answers the moment something changes
-    const url = STATE_URL + "?rev=" + rev + "&sfx=" + (sfxN ?? -1) + "&wait=" + (rev < 0 ? 0 : 20) + "&t=" + Date.now();
+    const url = STATE_URL + "?rev=" + rev + "&sfx=" + (sfxN ?? -1) + "&wait=" + (rev < 0 ? 0 : 20) + "&pv=4&ctx=" + (SAC ? SAC.state : "none") + "&loaded=" + Object.keys(sfxBuf).length + "&last=" + encodeURIComponent(sfxLast) + "&t=" + Date.now();
     const j = await (await fetch(url, { cache: "no-store" })).json();
     if (!j.ok) throw new Error(j.error || "bad reply");
     if (j.rev !== rev) { rev = j.rev; last = j.state || {}; draw(); }

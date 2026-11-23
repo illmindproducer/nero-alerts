@@ -248,7 +248,7 @@ const stale = () => !!(last.songId && neroId && neroId !== last.songId);
 const draw = () => render(Object.assign({}, last, { visible: !!last.visible && !stale() }));
 /* ---- sound effects: fired from the control page, played here so they go out on the stream.
         They are independent of the rating card: they play whether the card is showing or hidden. ---- */
-const SFX_IDS = ["fah", "airhorn", "boom", "bruh", "trombone", "crickets", "rewind", "rimshot", "explosion", "gunshots", "laugh", "applause", "oooh", "chaching", "buzzer", "siren"];
+const SFX_IDS = ["fah", "airhorn", "boom", "bruh", "trombone", "crickets", "scratch", "rimshot", "explosion", "gunshots", "laugh", "applause", "oooh", "chaching", "buzzer", "siren"];
 const sfxWarm = {}, sfxLive = new Set();
 SFX_IDS.forEach(id => { const a = new Audio("sfx/" + id + ".mp3"); a.preload = "auto"; sfxWarm[id] = a; });   // download up front
 function playSfx(ev) {

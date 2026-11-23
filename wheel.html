@@ -191,7 +191,7 @@ const A = (n, kf, ms, o) => n.animate(kf, Object.assign({ duration: ms, fill: "f
 const setAngle = a => { angle = a; $("turn").style.transform = `rotate(${a}deg)`; };
 function idle(now) { if (!shown) return; if (!busy) setAngle(angle + 0.12); requestAnimationFrame(idle); }
 async function show() {
-  clearTimeout(hideTimer); if (shown) return; shown = true; try { await ac().resume(); } catch (e) {}
+  clearTimeout(hideTimer); if (shown) return; shown = true; try { ac().resume(); } catch (e) {}   // never wait on this: an ordinary browser holds it until the page is clicked
   document.body.classList.remove("won", "rare", "spin"); $("dim").style.opacity = 1;
   A($("stage"), [{ opacity: 0, transform: "scale(.25) rotate(-25deg)" }, { opacity: 1, transform: "scale(1) rotate(0deg)" }], 650);
   A($("title"), [{ opacity: 0, transform: "translateY(-12vh)" }, { opacity: 1, transform: "translateY(0)" }], 500, { delay: 250 });
@@ -256,6 +256,9 @@ async function poll() {
   setTimeout(poll, pause);
 }
 if (qs.has("demo")) {
+  document.body.style.background = "#1a1d24";                 // previews get a backdrop; the real source stays see-through
+  const tip = Object.assign(document.createElement("div"), { textContent: "PREVIEW · click anywhere to turn the sound on", style: "position:fixed;right:12px;bottom:10px;font:13px ui-monospace,Menlo,monospace;color:#cbd5e1;background:rgba(0,0,0,.6);padding:6px 10px;border-radius:6px;z-index:9" });
+  document.body.appendChild(tip); addEventListener("pointerdown", () => { try { ac().resume(); } catch (e) {} tip.remove(); }, { once: true });
   setPrizes([{ id: 1, label: "IG FOLLOW + SHOUT OUT", value: "" }, { id: 2, label: "UNRELEASED SOUND PACK", value: "$50 value" }, { id: 3, label: "FREE THRONE", value: "$100 value" },
     { id: 4, label: "VIP CLUB · 6 MONTHS", value: "$120 value" }, { id: 5, label: "1-ON-1 ZOOM CALL", value: "$500 value" }, { id: 6, label: "FREE ILLMIND BEAT", value: "$30K value" }]);
   (async function loop() { const rare = qs.get("demo") === "rare", p = rare ? prizes[5] : prizes[Math.floor(Math.random() * 4)];

@@ -124,6 +124,8 @@
     <h2>AI BUDDY <span class="pill" id="budStatus">OFF</span></h2>
     <button class="big" id="budEars">TURN EARS ON</button>
     <div class="vol">CHIME-IN <input type="range" id="budDial" min="0" max="10" value="5"> <span id="budDialN">5</span></div>
+    <div class="vol">ITS VOLUME <input type="range" id="budVol" min="0" max="100" value="45"> <span id="budVolN">45</span></div>
+    <div class="vol">MIC BOOST <input type="range" id="budGain" min="1" max="12" value="5"> <span id="budGainN">5</span></div>
     <div class="two"><input type="text" id="budName" value="Trooper" maxlength="20" placeholder="Name it answers to" autocomplete="off">
       <select id="budVoice"><option>Charon</option><option>Fenrir</option><option>Orus</option><option>Puck</option><option>Algenib</option><option>Enceladus</option><option>Iapetus</option><option>Umbriel</option><option>Rasalgethi</option><option>Kore</option><option>Zephyr</option></select></div>
     <div class="two"><button class="mini" id="budTest">TEST VOICE</button><button class="mini shut" id="budShut">SHUT UP</button></div>
@@ -245,7 +247,7 @@ $("sfxVol").oninput = e => { $("sfxVolN").textContent = e.target.value; try { lo
         (in character) whether to say something; its reply is spoken by the buddy overlay on stream. ---- */
 const BRAIN = "https://xosofmhvgnxschaitgnb.supabase.co/functions/v1/buddy-brain";
 const bud = { on: false, stream: null, ctx: null, an: null, rec: null, parts: [], t0: 0, had: false, lastLoud: 0, tainted: false, inflight: 0, lastSpoke: 0, speakingUntil: 0, history: [], mime: "", timer: 0, lines: [] };
-const LOUD = 0.012, MAX_MS = 10000;                    // how loud counts as "something happening"; longest clip
+const LOUD = 0.02, MAX_MS = 10000;                    // how loud counts as "something happening"; longest clip
 const budSay = (t, cls) => { const el = $("budStatus"); el.textContent = t; el.className = "pill " + (cls || ""); };
 function budLog(kind, text) { bud.lines.push((kind ? "<b>" + kind + "</b> " : "") + String(text).replace(/</g, "&lt;")); bud.lines = bud.lines.slice(-5); $("budLog").innerHTML = bud.lines.join("\n"); }
 const b64 = o => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
@@ -258,7 +260,8 @@ function budContext() {
 async function budSpeak(j) {                           // hand a finished line to the overlay, and stop listening while it talks
   bud.lastSpoke = Date.now(); bud.speakingUntil = Date.now() + (j.dur + 1.2) * 1000; bud.tainted = true;
   bud.history.push("[you said] " + j.say); budLog("SAID", j.say); budSay("TALKING", "air");
-  await fetch(STATE_URL, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ buddy: { url: j.url, text: j.say, dur: j.dur } }) }).catch(() => {});
+  const url = j.url + "#v=" + ((+$("budVol").value) / 100).toFixed(2);          // the overlay reads its volume from the end of the link
+  await fetch(STATE_URL, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ buddy: { url, text: j.say, dur: j.dur } }) }).catch(() => {});
 }
 async function budSend(blob, ms) {
   if (bud.inflight >= 2) return;                       // never pile up requests
@@ -278,7 +281,7 @@ async function budSend(blob, ms) {
 function budChunk() {                                  // start recording the next clip
   if (!bud.on) return;
   bud.parts = []; bud.had = false; bud.tainted = Date.now() < bud.speakingUntil; bud.t0 = Date.now(); bud.lastLoud = 0;
-  const rec = bud.rec = new MediaRecorder(bud.stream, { mimeType: bud.mime, audioBitsPerSecond: 32000 });
+  const rec = bud.rec = new MediaRecorder(bud.boosted, { mimeType: bud.mime, audioBitsPerSecond: 32000 });
   rec.ondataavailable = e => { if (e.data && e.data.size) bud.parts.push(e.data); };
   rec.onstop = () => {
     const ms = Date.now() - bud.t0, keep = bud.had && !bud.tainted && ms > 1200;
@@ -291,7 +294,7 @@ function budTick() {                                   // 10 times a second: wat
   if (!bud.on) return;
   const buf = new Float32Array(bud.an.fftSize); bud.an.getFloatTimeDomainData(buf);
   let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i]; const rms = Math.sqrt(s / buf.length);
-  $("budLevel").style.transform = `scaleX(${Math.min(1, rms * 9)})`;
+  $("budLevel").style.transform = `scaleX(${Math.min(1, rms * 5)})`; $("budLevel").style.background = rms > LOUD ? "var(--green)" : "var(--dim)";   // green = loud enough to count
   const now = Date.now(), talking = now < bud.speakingUntil, ms = now - bud.t0;
   if (talking) bud.tainted = true;                      // its own voice is in the room: this clip is thrown away
   else if (bud.tainted && bud.rec && bud.rec.state === "recording") { bud.rec.stop(); return; }   // it just finished talking: start clean
@@ -308,8 +311,14 @@ async function budStart() {
   } catch (e) { budLog("ERROR", "Microphone blocked: " + e.message); return; }
   bud.mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || "";
   if (!bud.mime) { budLog("ERROR", "This browser cannot record audio. Use Chrome on the streaming computer."); return; }
+  // Boost the microphone before anything listens to it, so a normal speaking voice registers.
+  // A compressor after the boost stops loud music from distorting.
   bud.ctx = new (window.AudioContext || window.webkitAudioContext)(); bud.an = bud.ctx.createAnalyser(); bud.an.fftSize = 2048;
-  bud.ctx.createMediaStreamSource(bud.stream).connect(bud.an);
+  bud.gain = bud.ctx.createGain(); bud.gain.gain.value = +$("budGain").value;
+  const comp = bud.ctx.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 8; comp.attack.value = 0.005; comp.release.value = 0.2;
+  const out = bud.ctx.createMediaStreamDestination();
+  bud.ctx.createMediaStreamSource(bud.stream).connect(bud.gain); bud.gain.connect(comp); comp.connect(bud.an); comp.connect(out);
+  bud.boosted = out.stream;
   bud.on = true; bud.lines = []; budLog("", "Ears on. Say its name to talk to it.");
   $("budEars").classList.add("on"); $("budEars").textContent = "EARS ON · TAP TO TURN OFF"; budSay("LISTENING", "air");
   budChunk(); bud.timer = setInterval(budTick, 100);
@@ -329,7 +338,8 @@ $("budTest").onclick = async () => {
     if (!j.ok) throw new Error(j.error); await budSpeak(j);
   } catch (e) { budLog("ERROR", String(e.message || e)); }
 };
-for (const [id, key, show] of [["budDial", "bud_dial", "budDialN"], ["budName", "bud_name"], ["budVoice", "bud_voice"]]) {
+$("budGain").addEventListener("input", e => { if (bud.gain) bud.gain.gain.value = +e.target.value; });
+for (const [id, key, show] of [["budDial", "bud_dial", "budDialN"], ["budName", "bud_name"], ["budVoice", "bud_voice"], ["budVol", "bud_vol", "budVolN"], ["budGain", "bud_gain", "budGainN"]]) {
   try { const v = localStorage.getItem(key); if (v !== null) $(id).value = v; } catch (e) {}
   if (show) $(show).textContent = $(id).value;
   $(id).addEventListener("input", e => { if (show) $(show).textContent = e.target.value; try { localStorage.setItem(key, e.target.value); } catch (x) {} });

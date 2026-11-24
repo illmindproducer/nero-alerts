@@ -229,7 +229,7 @@ function newVideo(name) {
   const can = $("tvCan"); can.width = FW; can.height = FH; can.getContext("2d").clearRect(0, 0, FW, FH);   // never show the last prize's final frame
   pv = { name, a, sheets, dead: false, clock: 0 }; dropVideo(old); return pv;
 }
-function paint(p, my) {
+function tvFrames(p, my) {
   const ctx = $("tvCan").getContext("2d"); let last = -1;
   (function frame() {
     if (my !== runId || pv !== p || p.dead || !tvOn) return;
@@ -263,7 +263,7 @@ async function playTv(src, my) {
   const a = p.a; a.volume = vol; a.muted = false; a.onended = finish; a.onerror = silent;
   try { await a.play(); } catch (e) { silent(); }
   if (my !== runId) return;
-  paint(p, my);
+  tvFrames(p, my);
   await done; if (my !== runId) return;
   tvOff(false); await wait(650); if (my !== runId) return;
   hide();

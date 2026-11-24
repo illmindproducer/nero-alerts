@@ -52,6 +52,7 @@
   /* the old TV the prize video plays on: the picture sits in a box behind the cabinet image, whose screen is see-through */
   #tv { position: fixed; left: 50%; top: 50%; height: min(94vh, 98vw); aspect-ratio: 961 / 1002; transform: translate(-50%, -50%) scale(.2); opacity: 0; pointer-events: none; will-change: transform, opacity; }
   #tv .scr { position: absolute; left: 8.9%; top: 27%; width: 66.8%; height: 53.7%; background: #050505; overflow: hidden; border-radius: 9% / 11%; }
+  #tv .pic { position: absolute; inset: 0; transform-origin: 50% 50%; }
   #tv video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 35%; transform-origin: 50% 50%; }
   #tv .glass { position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 1px, rgba(0,0,0,0) 1px 3px), radial-gradient(ellipse at 30% 18%, rgba(255,255,255,.16), rgba(255,255,255,0) 45%), radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 62%, rgba(0,0,0,.5)); }
   #tv .line { position: absolute; inset: 0; background: #fff; opacity: 0; }
@@ -76,7 +77,7 @@
 <div id="who">SPINNING FOR <b id="whoName"></b></div>
 <div id="flash"></div>
 <div id="win"><div class="k" id="winK">WINNER</div><div class="name" id="winName"></div><div class="wins">WINS</div><div class="prize" id="winPrize"></div><div class="val" id="winVal"></div></div>
-<div id="tv"><div class="scr"><video id="pvid" playsinline preload="auto"></video><div class="glass"></div><div class="line" id="tvLine"></div></div><img src="prize/tv.webp" alt=""></div>
+<div id="tv"><div class="scr"><div class="pic" id="tvPic"></div><div class="glass"></div><div class="line" id="tvLine"></div></div><img src="prize/tv.webp" alt=""></div>
 <div id="dbg"></div>
 <script>
 /* Prize wheel overlay. The control page sends show / spin / hide; the prize is picked by the server BEFORE the wheel
@@ -213,27 +214,42 @@ function cfFrame(now) {
    Add ?video=0 to the link to switch the videos off. */
 const PRIZE_VIDEOS = [[/throne/i, "throne"], [/beat/i, "beat"], [/sound\s*pack/i, "soundpack"], [/zoom|video call|1[\s-]*on[\s-]*1|one on one/i, "zoom"], [/vip|club/i, "vip"], [/insta|shout/i, "instagram"]];
 function prizeVideo(sp) { if (qs.get("video") === "0") return null; const t = (sp.name || "") + " " + (sp.label || ""), m = PRIZE_VIDEOS.find(([re]) => re.test(t)); return m ? "prize/" + m[1] + ".webm?v=2" : null; }   // bump v when the files change, so nobody gets a stale copy
-let tvOn = false;
+let tvOn = false, pv = null;
+/* A brand-new player for every win. Reusing one player left it shrunk to nothing after the switch-off effect, and the
+   browser inside Streamlabs then kept the sound going but stopped drawing the picture. */
+function dropVideo(v) { if (!v) return; try { v.onended = v.onerror = null; v.pause(); v.removeAttribute("src"); v.load(); } catch (e) {} v.remove(); }
+function newVideo(src, at) {
+  const old = pv, v = pv = document.createElement("video");
+  v.playsInline = true; v.preload = "auto"; v.src = src; $("tvPic").appendChild(v); v.load();
+  if (at) v.addEventListener("loadedmetadata", () => { try { v.currentTime = at; } catch (e) {} }, { once: true });
+  dropVideo(old); return v;
+}
+function resetPic() { const pic = $("tvPic"); pic.getAnimations().forEach(a => a.cancel()); pic.style.transform = ""; }
 function tvOff(fast) {                                         // picture collapses to a line, then the set leaves
-  const v = $("pvid"); try { v.pause(); } catch (e) {}
+  const v = pv; try { v && v.pause(); } catch (e) {}
   if (!tvOn) return; tvOn = false;
-  if (!fast) { A(v, [{ transform: "scale(1, 1)" }, { transform: "scale(1, .02)", offset: 0.6 }, { transform: "scale(0, .02)" }], 260, { easing: "ease-in" }); const t = ac().currentTime; tone(200, t, 0.18, "sine", 0.2, 60); }
+  if (!fast) { A($("tvPic"), [{ transform: "scale(1, 1)" }, { transform: "scale(1, .02)", offset: 0.6 }, { transform: "scale(0, .02)" }], 260, { easing: "ease-in" }); const t = ac().currentTime; tone(200, t, 0.18, "sine", 0.2, 60); }
   A($("tv"), [{ opacity: 1, transform: "translate(-50%, -50%) scale(1)" }, { opacity: 0, transform: "translate(-50%, -50%) scale(.3)" }], 300, { delay: fast ? 0 : 280, easing: "ease-in" });
 }
 async function playTv(src, my) {
-  const v = $("pvid"), tv = $("tv");
+  const tv = $("tv"); let v = pv; if (!v) v = newVideo(src);
   A($("win"), [{ opacity: 1, transform: "translate(-50%, -50%) scale(1)" }, { opacity: 0, transform: "translate(-50%, -50%) scale(.6)" }], 250, { easing: "ease-in" });
   document.body.classList.remove("won"); cf.until = 0;                                   // lights calm down, confetti stops: the TV has the floor
-  tvOn = true; v.style.transform = ""; v.getAnimations().forEach(a => a.cancel());
+  tvOn = true; resetPic();
   A($("title"), [{ opacity: 1 }, { opacity: 0 }], 250);                                   // the title would sit behind the antenna
   A(tv, [{ opacity: 0, transform: "translate(-50%, -150%) scale(.9) rotate(-6deg)" }, { opacity: 1, transform: "translate(-50%, -50%) scale(1) rotate(0deg)" }], 520);
   const t = ac().currentTime; noise(t + 0.45, 0.5, 0.35, 2500, 5000); tone(90, t + 0.42, 0.12, "square", 0.25, 50);   // a thunk, then a burst of static as it warms up
   A($("tvLine"), [{ opacity: 0, transform: "scale(1, .01)" }, { opacity: 1, transform: "scale(1, .01)", offset: 0.25 }, { opacity: 0.85, transform: "scale(1, 1)", offset: 0.7 }, { opacity: 0, transform: "scale(1, 1)" }], 520, { delay: 430, easing: "ease-out" });
   await wait(620); if (my !== runId) return;
-  try { v.currentTime = 0; } catch (e) {}
-  v.volume = Math.min(1, VOL * 1.4); v.muted = false;        // the files themselves are mastered loud; this is full volume unless ?vol= is turned down
-  const done = new Promise(res => { v.onended = res; v.onerror = res; setTimeout(res, 24000); });
-  try { await v.play(); } catch (e) { v.muted = true; try { await v.play(); } catch (x) {} }   // an ordinary browser may refuse sound until clicked
+  const vol = Math.min(1, VOL * 1.4);                        // the files themselves are mastered loud; this is full volume unless ?vol= is turned down
+  let finish; const done = new Promise(res => { finish = res; setTimeout(res, 24000); });
+  const start = async x => { x.volume = vol; x.muted = false; x.onended = finish; x.onerror = finish;
+    try { await x.play(); } catch (e) { x.muted = true; try { await x.play(); } catch (y) {} } };   // an ordinary browser may refuse sound until clicked
+  await start(v);
+  // safety net: sound running but not one frame of picture decoded after two seconds, so swap in a fresh player at the same spot
+  setTimeout(() => { if (my !== runId || pv !== v || v.paused || v.currentTime < 1) return;
+    const q = v.getVideoPlaybackQuality ? v.getVideoPlaybackQuality().totalVideoFrames : 1;
+    if (!v.videoWidth || !q) { v = newVideo(src, v.currentTime); start(v); } }, 2200);
   await done; if (my !== runId) return;
   tvOff(false); await wait(650); if (my !== runId) return;
   hide();
@@ -260,7 +276,7 @@ async function spin(sp) {
   if (!slices.length) return; const my = ++runId;
   if (!shown) { await show(); await wait(1100); if (my !== runId) return; }
   if (busy) return; busy = true; clearTimeout(hideTimer); tvOff(true);
-  const vsrc = prizeVideo(sp); if (vsrc) { const v = $("pvid"); if (!v.src.endsWith(vsrc)) { v.src = vsrc; v.load(); } }   // start fetching the prize video while the wheel spins
+  const vsrc = prizeVideo(sp); if (vsrc) newVideo(vsrc); else { dropVideo(pv); pv = null; }   // start fetching the prize video while the wheel spins
   document.body.classList.remove("won", "rare"); document.body.classList.add("spin");
   A($("win"), [{ opacity: 0, transform: "translate(-50%, -50%) scale(.2)" }], 1);
   $("whoName").textContent = sp.winner || "…"; $("who").style.opacity = sp.winner ? 1 : 0;

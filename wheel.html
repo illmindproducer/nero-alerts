@@ -78,7 +78,7 @@
 <div id="who">SPINNING FOR <b id="whoName"></b></div>
 <div id="flash"></div>
 <div id="win"><div class="k" id="winK">WINNER</div><div class="name" id="winName"></div><div class="wins">WINS</div><div class="prize" id="winPrize"></div><div class="val" id="winVal"></div></div>
-<div id="tv"><div class="scr"><div class="pic" id="tvPic"><canvas id="tvCan"></canvas></div><div class="glass"></div><div class="line" id="tvLine"></div></div><img src="prize/tv.webp" alt=""></div>
+<div id="tv"><div class="scr"><div class="pic" id="tvPic"><canvas id="tvCan" style="display:none"></canvas></div><div class="glass"></div><div class="line" id="tvLine"></div></div><img src="prize/tv.webp" alt=""></div>
 <div id="dbg"></div>
 <script>
 /* Prize wheel overlay. The control page sends show / spin / hide; the prize is picked by the server BEFORE the wheel
@@ -231,6 +231,7 @@ function newVideo(src, at) {
    the two shows. If the canvas only ever gets pure black, it steps aside and leaves the player showing. */
 const tiny = document.createElement("canvas"); tiny.width = tiny.height = 8; const tctx = tiny.getContext("2d", { willReadFrequently: true });
 function mirror(v, my) {
+  $("tvCan").style.display = "none"; if (!qs.has("mirror")) return;    // switched off 2026-11-24: with it on, no prize video showed in Streamlabs. ?mirror=1 brings it back.
   const can = $("tvCan"), box = can.getBoundingClientRect(), ctx = can.getContext("2d"); let n = 0, black = 0;
   can.width = 720; can.height = Math.max(2, Math.round(720 * (box.height || 388) / (box.width || 463))); can.style.display = "";
   (function frame() {

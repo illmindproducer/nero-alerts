@@ -129,10 +129,10 @@
     <h2>AI BUDDY <span class="pill" id="budStatus">OFF</span></h2>
     <button class="big" id="budEars">TURN EARS ON</button>
     <div class="vol">CHIME-IN <input type="range" id="budDial" min="0" max="10" value="5"> <span id="budDialN">5</span></div>
-    <div class="vol">ITS VOLUME <input type="range" id="budVol" min="0" max="100" value="45"> <span id="budVolN">45</span></div>
-    <div class="vol">MIC BOOST <input type="range" id="budGain" min="1" max="12" value="5"> <span id="budGainN">5</span></div>
+    <div class="vol">ITS VOLUME <input type="range" id="budVol" min="0" max="100" value="80"> <span id="budVolN">80</span></div>
+    <div class="vol">MIC BOOST <input type="range" id="budGain" min="1" max="12" value="11"> <span id="budGainN">11</span></div>
     <div class="two"><input type="text" id="budName" value="Ape" maxlength="20" placeholder="Name it answers to" autocomplete="off">
-      <select id="budVoice"><option>Charon</option><option>Fenrir</option><option>Orus</option><option>Puck</option><option>Algenib</option><option>Enceladus</option><option>Iapetus</option><option>Umbriel</option><option>Rasalgethi</option><option>Kore</option><option>Zephyr</option></select></div>
+      <select id="budVoice"><option>Fenrir</option><option>Charon</option><option>Orus</option><option>Puck</option><option>Algenib</option><option>Enceladus</option><option>Iapetus</option><option>Umbriel</option><option>Rasalgethi</option><option>Kore</option><option>Zephyr</option></select></div>
     <div class="vol" style="margin-top:10px">ON SCREEN NOW <span id="budSceneN" style="margin-left:auto">LIVE</span></div>
     <div class="two" style="grid-template-columns:1fr 1fr 1fr"><button class="mini sel" data-scene="live">LIVE</button><button class="mini" data-scene="welcome">WELCOME VIDEO</button><button class="mini" data-scene="gems">GEMS VIDEO</button></div>
     <div class="two"><button class="mini" id="budTest">TEST VOICE</button><button class="mini shut" id="budShut">SHUT UP</button></div>
@@ -422,6 +422,8 @@ $("budGain").addEventListener("input", e => { if (bud.gain) bud.gain.gain.value 
 try { if (localStorage.getItem("bud_is_chip")) { localStorage.removeItem("bud_is_chip"); localStorage.setItem("bud_name", "Trooper"); localStorage.setItem("bud_voice", "Charon"); } } catch (e) {}
 /* The buddy is now Ape. Once per device, change the name he answers to (the voice choice is left alone). */
 try { if (!localStorage.getItem("bud_is_ape")) { localStorage.setItem("bud_is_ape", "1"); localStorage.setItem("bud_name", "Ape"); } } catch (e) {}
+/* illmind's standard settings (2026-11-24): voice Fenrir, chime-in 5, volume 80, mic boost 11. Applied once per device, over whatever was saved before; changes made after that stick. */
+try { if (!localStorage.getItem("bud_defaults_2")) { localStorage.setItem("bud_defaults_2", "1"); localStorage.setItem("bud_voice", "Fenrir"); localStorage.setItem("bud_dial", "5"); localStorage.setItem("bud_vol", "80"); localStorage.setItem("bud_gain", "11"); } } catch (e) {}
 for (const [id, key, show] of [["budDial", "bud_dial", "budDialN"], ["budName", "bud_name"], ["budVoice", "bud_voice"], ["budVol", "bud_vol", "budVolN"], ["budGain", "bud_gain", "budGainN"]]) {
   try { const v = localStorage.getItem(key); if (v !== null) $(id).value = v; } catch (e) {}
   if (show) $(show).textContent = $(id).value;

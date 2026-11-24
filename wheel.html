@@ -9,6 +9,7 @@
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; }
   :root { --S: min(74vh, 62vw); }
   #dim { position: fixed; inset: 0; opacity: 0; background: radial-gradient(ellipse at 50% 48%, rgba(40,10,60,.72), rgba(0,0,0,.86) 70%); transition: opacity .5s ease; }
+  body:not(.dim) #dim { display: none; }                      /* fully see-through by default; add ?dim=1 to the link for the dark backdrop */
   #flash { position: fixed; inset: 0; opacity: 0; background: #ffe27a; pointer-events: none; }
   #stage { position: fixed; inset: 0; display: grid; place-items: center; opacity: 0; transform: scale(.25) rotate(-25deg); will-change: transform, opacity; }
   #rig { position: relative; width: var(--S); height: var(--S); margin-top: 4vh; }
@@ -80,6 +81,7 @@ const COLORS = ["#e5173f", "#1e5bff", "#00a85f", "#8a2be2", "#ff7a00", "#00b3c4"
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const R = (a, b) => a + Math.random() * (b - a);
 if (qs.has("debug")) $("dbg").style.display = "block";
+if (qs.get("dim") === "1") document.body.classList.add("dim");
 
 /* ---------------- drawing the wheel ---------------- */
 let prizes = [], slices = [], seg = 60, angle = 0, shown = false, busy = false, hideTimer = null, runId = 0;

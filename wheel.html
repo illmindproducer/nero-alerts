@@ -231,7 +231,7 @@ async function playTv(src, my) {
   A($("tvLine"), [{ opacity: 0, transform: "scale(1, .01)" }, { opacity: 1, transform: "scale(1, .01)", offset: 0.25 }, { opacity: 0.85, transform: "scale(1, 1)", offset: 0.7 }, { opacity: 0, transform: "scale(1, 1)" }], 520, { delay: 430, easing: "ease-out" });
   await wait(620); if (my !== runId) return;
   try { v.currentTime = 0; } catch (e) {}
-  v.volume = Math.min(1, VOL * 1.1); v.muted = false;
+  v.volume = Math.min(1, VOL * 1.4); v.muted = false;        // the files themselves are mastered loud; this is full volume unless ?vol= is turned down
   const done = new Promise(res => { v.onended = res; v.onerror = res; setTimeout(res, 24000); });
   try { await v.play(); } catch (e) { v.muted = true; try { await v.play(); } catch (x) {} }   // an ordinary browser may refuse sound until clicked
   await done; if (my !== runId) return;

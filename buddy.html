@@ -8,7 +8,7 @@
 <style>
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
   /* The page IS the character: it fills the browser source, so size and place it in Streamlabs. */
-  #wrap { position: fixed; inset: 0; display: grid; place-items: start center; padding-top: 2vh; box-sizing: border-box; }
+  #wrap { position: fixed; inset: 0; display: grid; place-items: start center; padding-top: 5vh; box-sizing: border-box; }
   /* captions: what he is saying, a few words at a time, just under his mouth */
   #cap { position: fixed; left: 3vw; right: 3vw; bottom: 2.5vh; text-align: center; pointer-events: none; opacity: 0; transition: opacity .12s ease; }
   #cap.on { opacity: 1; }
@@ -18,32 +18,37 @@
   #cap span.pop { animation: cap .16s cubic-bezier(.2,1.6,.3,1) 1; }
   @keyframes cap { 0% { transform: scale(.82); } 100% { transform: scale(1); } }
   body.nocap #cap { display: none; }
-  body.nocap #head { height: 86vh; }
+  body.nocap #head { height: 82vh; }
   body.nocap #wrap { place-items: center; padding-top: 0; }
-  #head { position: relative; height: 74vh; aspect-ratio: 640 / 720; max-width: 92vw; transform-origin: 50% 85%; will-change: transform; }
+  #head { position: relative; height: 68vh; aspect-ratio: 776 / 900; max-width: 88vw; transform-origin: 50% 92%; will-change: transform; }
   #head img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; }
   #head img#m0 { opacity: 1; }
-  #glow { position: absolute; left: 12%; top: 58%; width: 44%; height: 36%; border-radius: 50%; opacity: 0; pointer-events: none;
-          background: radial-gradient(closest-side, rgba(57,255,106,.75), rgba(57,255,106,0)); mix-blend-mode: screen; }
+  /* the lights: soft glows laid over the green parts of the helmet, brightened and dimmed from the script */
+  .lamp { position: absolute; border-radius: 50%; opacity: 0; pointer-events: none; mix-blend-mode: screen; transform: translate(-50%, -50%); will-change: opacity;
+          background: radial-gradient(closest-side, rgba(190,255,200,.95), rgba(57,255,106,.6) 38%, rgba(57,255,106,0)); }
   #dbg { position: fixed; left: 8px; bottom: 8px; font: 12px ui-monospace, Menlo, monospace; color: #7dffa6; background: rgba(0,0,0,.7); padding: 6px 8px; border-radius: 6px; display: none; white-space: pre; }
 </style>
 </head>
 <body>
 <div id="wrap"><div id="head">
-  <img id="m0" src="buddy/m0.png" alt=""><img id="m1" src="buddy/m1.png" alt=""><img id="m2" src="buddy/m2.png" alt="">
-  <div id="glow"></div>
+  <img id="m0" src="buddy/m0.webp" alt=""><img id="m1" src="buddy/m1.webp" alt=""><img id="m2" src="buddy/m2.webp" alt=""><img id="blink" src="buddy/blink.webp" alt="">
 </div></div>
 <div id="cap"><span id="capText"></span></div>
 <div id="dbg"></div>
 <script>
-/* Stream buddy face. Three drawings of the same helmet (mouth shut / half open / wide open) are swapped
-   in time with the loudness of whatever it is saying, so the mouth follows the actual voice.
-   say(url) plays a clip and lip-syncs to it.
-   ?captions=0 hides the captions   ?demo=1 speaks a test line on a loop   ?debug=1 shows a readout   ?radio=0..1 how much helmet-radio effect (default 0.6)   ?vol=0..1.5 */
+/* Stream buddy face. Four drawings of the same helmet (mouth shut / half open / wide open / eyes closed) are swapped
+   in time with the loudness of whatever it is saying, so the mouth follows the actual voice. It blinks, its lights
+   pulse, and when the control page says music is playing it bops its head.
+   ?captions=0 hides the captions   ?demo=1 speaks a test line on a loop   ?demo=music also bops   ?debug=1 shows a readout
+   ?radio=0..1 how much helmet-radio effect (default 0.6)   ?vol=0..1.5 */
 const qs = new URLSearchParams(location.search), $ = id => document.getElementById(id);
-const head = $("head"), m = [$("m0"), $("m1"), $("m2")], glow = $("glow"), dbg = $("dbg");
+const head = $("head"), m = [$("m0"), $("m1"), $("m2"), $("blink")], dbg = $("dbg");
 if (qs.has("debug")) dbg.style.display = "block";
 if (qs.get("captions") === "0") document.body.classList.add("nocap");          // ?captions=0 hides them
+
+/* where the lights are on the drawing, in % of its width / height: [name, x, y, size] */
+const LAMPS = [["antenna", 49.8, 6.6, 46], ["eyeL", 36.3, 60.1, 50], ["eyeR", 66.1, 63.1, 38], ["cheekL", 20.1, 77.8, 26], ["cheekR", 79.2, 77.9, 26], ["mouth", 50, 80.5, 44]];
+const lamp = {}; for (const [k, x, y, z] of LAMPS) { const d = document.createElement("div"); d.className = "lamp"; d.style.left = x + "%"; d.style.top = y + "%"; d.style.width = z + "%"; d.style.aspectRatio = "1"; head.appendChild(d); lamp[k] = d; }
 
 let AC = null;
 const ac = () => AC || (AC = new (window.AudioContext || window.webkitAudioContext)());
@@ -91,7 +96,7 @@ async function say(url, text) {
   const buf = await ctx.decodeAudioData(await (await fetch(url)).arrayBuffer());
   if (id !== talk.id) return;                       // a newer line (or a stop) arrived while this one was loading
   stop(true);
-  try { await ctx.resume(); } catch (e) {}
+  try { ctx.resume(); } catch (e) {}                // never wait on this: an ordinary browser holds it until the page is clicked
   talk.env = envelope(buf); talk.dur = buf.duration; talk.blocked = ctx.state !== "running";
   setCaptions(text, buf.duration);
   if (talk.blocked) talk.clock = performance.now();        // ordinary browsers refuse sound until clicked: animate anyway
@@ -100,6 +105,11 @@ async function say(url, text) {
 }
 function stop(keepId) { if (!keepId) talk.id++; if (talk.src) { try { talk.src.stop(); } catch (e) {} } talk.src = null; talk.env = null; cap.groups = []; cap.i = -1; $("cap").classList.remove("on"); }
 
+/* music: the control page hears the room and tells this page when a song is playing; he bops until told otherwise.
+   The signal is repeated every 20 seconds while music plays, so if it ever stops arriving he settles by himself. */
+const music = { until: qs.get("demo") === "music" ? Infinity : 0, amt: 0 };
+const eyes = { next: performance.now() + 2500, until: 0 };
+let showing = 0;
 function frame(now) {
   // 1. how loud is the voice right now?
   let target = 0;
@@ -110,39 +120,57 @@ function frame(now) {
   }
   // 2. mouths open fast and close a little slower, like a real jaw
   talk.level += (target - talk.level) * (target > talk.level ? 0.55 : 0.22);
-  const L = talk.level, speaking = !!talk.env;
+  const L = talk.level, speaking = !!talk.env, s = now / 1000;
   const open = L > 0.42 ? 2 : L > 0.13 ? 1 : 0;
-  if (open !== talk.open) { m.forEach((img, i) => img.style.opacity = i === open ? 1 : 0); talk.open = open; }
-  glow.style.opacity = speaking ? Math.min(1, L * 1.3) : 0;
-  // 3. body language: a slow idle float, plus nods and a lean-in while talking
-  const s = now / 1000;
-  const bob = Math.sin(s * 1.7) * 1.2 + (speaking ? Math.sin(s * 9) * L * 2.2 : 0);
-  const tilt = Math.sin(s * 0.9) * 1.6 + (speaking ? Math.sin(s * 5.3) * L * 3 : 0);
-  head.style.transform = `translateY(${bob}%) rotate(${tilt}deg) scale(${1 + L * 0.045})`;
-  if (qs.has("debug")) dbg.textContent = `speaking: ${speaking}  level: ${L.toFixed(2)}  mouth: ${open}  sound blocked: ${talk.blocked}`;
+  // 3. blinking: every few seconds, and only while the mouth is shut (the blink drawing has a closed mouth)
+  if (now > eyes.next) { eyes.until = now + 130; eyes.next = now + 2200 + Math.random() * 3800 + (Math.random() < 0.2 ? -1900 : 0); }
+  const blinking = open === 0 && now < eyes.until, pic = blinking ? 3 : open;
+  if (pic !== showing) { m.forEach((img, i) => img.style.opacity = i === pic ? 1 : 0); showing = pic; talk.open = open; }
+  // 4. is music playing? ease in and out of the bop so it never snaps
+  const on = Date.now() < music.until; music.amt += ((on ? 1 : 0) - music.amt) * 0.05; const B = music.amt;
+  const beat = Math.abs(Math.sin(s * Math.PI * 1.95)), hit = Math.pow(1 - beat, 3);     // "hit" spikes once per nod, at the bottom of it
+  // 5. lights: a slow idle pulse, brighter with his voice, and flashing with the nod when music is on
+  const idle = 0.5 + 0.5 * Math.sin(s * 2.1), v = Math.min(1, L * 1.4);
+  lamp.antenna.style.opacity = Math.min(1, 0.25 + 0.3 * idle + v * 0.7 + B * hit * 0.9).toFixed(3);
+  const eye = blinking ? 0 : Math.min(1, 0.12 + 0.12 * idle + v * 0.55 + B * hit * 0.4).toFixed(3); lamp.eyeL.style.opacity = eye; lamp.eyeR.style.opacity = eye;
+  const side = Math.sin(s * Math.PI * 1.95) > 0;                                        // cheeks take turns on the beat
+  lamp.cheekL.style.opacity = Math.min(1, 0.15 + v * 0.5 + B * (side ? 0.9 : 0.05) * (0.4 + 0.6 * hit)).toFixed(3);
+  lamp.cheekR.style.opacity = Math.min(1, 0.15 + v * 0.5 + B * (side ? 0.05 : 0.9) * (0.4 + 0.6 * hit)).toFixed(3);
+  lamp.mouth.style.opacity = (open ? Math.min(1, 0.25 + v * 0.75) : 0).toFixed(3);
+  // 6. body language: a lazy float and sway; squash and stretch while talking; a head-nod bop while music plays
+  const floatY = Math.sin(s * 1.5) * 2.2 + Math.sin(s * 0.63) * 1.1, sway = Math.sin(s * 0.8) * 3 + Math.sin(s * 2.3) * 0.8;
+  const talkY = speaking ? Math.sin(s * 9) * L * 2 : 0, talkR = speaking ? Math.sin(s * 5.3) * L * 4 : 0;
+  const bopY = B * (1 - beat) * 7.5, bopR = B * Math.sin(s * Math.PI * 0.975) * 4.5;       // drops on each nod, leans side to side every other one
+  const sx = 1 + L * 0.03 + B * hit * 0.05, sy = 1 + L * 0.07 - B * hit * 0.07;            // wider and shorter at the bottom of a nod
+  head.style.transform = `translateY(${(floatY * (1 - B * 0.6) + talkY + bopY).toFixed(2)}%) rotate(${(sway * (1 - B * 0.5) + talkR + bopR).toFixed(2)}deg) scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`;
+  if (qs.has("debug")) dbg.textContent = `speaking: ${speaking}  level: ${L.toFixed(2)}  mouth: ${open}  music: ${on} (${B.toFixed(2)})  sound blocked: ${talk.blocked}`;
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-window.buddy = { say, stop, talk };
+window.buddy = { say, stop, talk, music };
 
 /* ---- live lines: the brain's replies arrive here (same channel as the rating card and sound pads) ---- */
 const STATE_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-rating";
 let budN = null;
+const setMusic = e => { music.until = e.music ? (e.at || Date.now()) + 32000 : 0; };
 async function poll() {
   let pause = 30;
   try {
     const j = await (await fetch(STATE_URL + "?bud=" + (budN ?? -1) + "&wait=" + (budN === null ? 0 : 20) + "&t=" + Date.now(), { cache: "no-store" })).json();
     if (!j.ok) throw new Error(j.error || "bad reply");
-    if (budN === null) budN = j.buddy_n;                    // first look: do not replay old lines
+    if (budN === null) { budN = j.buddy_n;                  // first look: do not replay old lines, but do pick up whether music is on
+      const lastMusic = (j.buddy || []).filter(e => "music" in e).pop(); if (lastMusic) setMusic(lastMusic); }
     else if (j.buddy_n !== budN) {
       const fresh = (j.buddy || []).filter(e => e.n > budN); budN = j.buddy_n;
-      const last = fresh[fresh.length - 1];
+      fresh.filter(e => "music" in e).forEach(setMusic);
+      const last = fresh.filter(e => !("music" in e)).pop();
       if (last) { if (last.stop) stop(); else say(last.url, last.text).catch(() => {}); }
     }
   } catch (e) { pause = 2000; }
   setTimeout(poll, pause);
 }
-if (qs.has("demo")) (async function loop() { try { await say("buddy/demo.mp3", "Yo chat, I'm online. Illmind, that last beat? The drums were crazy. But that mix... needs some help, my guy."); } catch (e) { dbg.textContent = "demo failed: " + e; } setTimeout(loop, 2500); })();
+if (qs.has("demo")) { document.body.style.background = "#1a1d24"; addEventListener("pointerdown", () => { try { ac().resume(); } catch (e) {} }, { once: true });
+  (async function loop() { try { await say("buddy/demo.mp3", "Yo chat, I'm online. Illmind, that last beat? The drums were crazy. But that mix... needs some help, my guy."); } catch (e) { dbg.textContent = "demo failed: " + e; } setTimeout(loop, 3500); })(); }
 else poll();
 </script>
 </body>

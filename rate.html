@@ -281,7 +281,7 @@ $("sfxVol").oninput = e => { $("sfxVolN").textContent = e.target.value; try { lo
 /* ---- AI buddy: this device's microphone is its ears. Short clips of the room go to the brain, which decides
         (in character) whether to say something; its reply is spoken by the buddy overlay on stream. ---- */
 const BRAIN = "https://xosofmhvgnxschaitgnb.supabase.co/functions/v1/buddy-brain";
-const bud = { on: false, stream: null, ctx: null, an: null, rec: null, parts: [], t0: 0, had: false, lastLoud: 0, tainted: false, inflight: 0, lastSpoke: 0, speakingUntil: 0, history: [], mime: "", timer: 0, lines: [] };
+const bud = { on: false, stream: null, ctx: null, an: null, rec: null, parts: [], t0: 0, had: false, lastLoud: 0, tainted: false, inflight: 0, lastSpoke: 0, speakingUntil: 0, history: [], mime: "", timer: 0, lines: [], loud: [], musLocal: false, musVeto: 0, music: false, musSent: 0 };
 const LOUD = 0.02, MAX_MS = 10000;                    // how loud counts as "something happening"; longest clip
 const budSay = (t, cls) => { const el = $("budStatus"); el.textContent = t; el.className = "pill " + (cls || ""); };
 function budLog(kind, text) { bud.lines.push((kind ? "<b>" + kind + "</b> " : "") + String(text).replace(/</g, "&lt;")); bud.lines = bud.lines.slice(-5); $("budLog").innerHTML = bud.lines.join("\n"); }
@@ -308,6 +308,8 @@ async function budSend(blob, ms) {
     const j = await r.json();
     if (!j.ok) { budLog("ERROR", j.error === "daily_cap" ? "Daily limit reached. Ears are off until tomorrow." : j.error); if (j.error === "daily_cap") budStop(); return; }
     if (j.heard && j.heard !== "silence") { bud.history.push("[room] " + j.heard); budLog("HEARD", j.heard); }
+    if (j.music === true) bud.musLocal = true;                                     // the brain heard a song: start the head-bop straight away
+    else if (j.music === false && j.heard && j.heard !== "silence") bud.musVeto = Date.now() + 6000;   // it was only talking: no bopping for a moment
     bud.history = bud.history.slice(-20);
     if (j.url && bud.on && Date.now() > bud.speakingUntil) await budSpeak(j);
   } catch (e) { budLog("ERROR", String(e)); }
@@ -325,6 +327,13 @@ function budChunk() {                                  // start recording the ne
   };
   rec.start();
 }
+/* Tell the overlay whether music is playing, so the head bops. Sent when it changes, and repeated every 20 seconds
+   while music is on (the overlay stops bopping by itself if these stop arriving). */
+function budMusic(on) {
+  const now = Date.now(); if (on === bud.music && !(on && now - bud.musSent > 20000)) return;
+  bud.music = on; bud.musSent = now;
+  fetch(STATE_URL, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ buddy: { music: on } }) }).catch(() => {});
+}
 function budTick() {                                   // 10 times a second: watch the level and decide when a clip ends
   if (!bud.on) return;
   const buf = new Float32Array(bud.an.fftSize); bud.an.getFloatTimeDomainData(buf);
@@ -333,7 +342,11 @@ function budTick() {                                   // 10 times a second: wat
   const now = Date.now(), talking = now < bud.speakingUntil, ms = now - bud.t0;
   if (talking) bud.tainted = true;                      // its own voice is in the room: this clip is thrown away
   else if (bud.tainted && bud.rec && bud.rec.state === "recording") { bud.rec.stop(); return; }   // it just finished talking: start clean
-  if (!talking && !bud.inflight) budSay("LISTENING", "air");
+  if (!talking && !bud.inflight) budSay(bud.music ? "LISTENING · MUSIC ON" : "LISTENING", "air");
+  // Is music playing? Music is loud almost without a break; talking has gaps. Looked at over the last 5 seconds.
+  if (!talking) { bud.loud.push(rms > LOUD ? 1 : 0); if (bud.loud.length > 50) bud.loud.shift(); }
+  if (bud.loud.length >= 50) { const share = bud.loud.reduce((a, b) => a + b, 0) / bud.loud.length; if (share >= 0.9) bud.musLocal = true; else if (share < 0.55) bud.musLocal = false; }
+  budMusic(bud.musLocal && now > bud.musVeto);
   if (rms > LOUD) { bud.had = true; bud.lastLoud = now; }
   if (!bud.rec || bud.rec.state !== "recording") return;
   const pauseAfterSound = bud.had && ms > 2500 && now - bud.lastLoud > 900;      // he stopped talking: answer quickly
@@ -360,6 +373,7 @@ async function budStart() {
 }
 function budStop() {
   bud.on = false; clearInterval(bud.timer);
+  bud.loud = []; bud.musLocal = false; budMusic(false);       // ears off: he stops bopping
   try { if (bud.rec && bud.rec.state === "recording") { bud.rec.onstop = null; bud.rec.stop(); } } catch (e) {}
   if (bud.stream) bud.stream.getTracks().forEach(t => t.stop()); if (bud.ctx) bud.ctx.close().catch(() => {});
   $("budEars").classList.remove("on"); $("budEars").textContent = "TURN EARS ON"; $("budLevel").style.transform = "scaleX(0)"; budSay("OFF");

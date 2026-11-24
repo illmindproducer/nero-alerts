@@ -133,6 +133,8 @@
     <div class="vol">MIC BOOST <input type="range" id="budGain" min="1" max="12" value="5"> <span id="budGainN">5</span></div>
     <div class="two"><input type="text" id="budName" value="Ape" maxlength="20" placeholder="Name it answers to" autocomplete="off">
       <select id="budVoice"><option>Charon</option><option>Fenrir</option><option>Orus</option><option>Puck</option><option>Algenib</option><option>Enceladus</option><option>Iapetus</option><option>Umbriel</option><option>Rasalgethi</option><option>Kore</option><option>Zephyr</option></select></div>
+    <div class="vol" style="margin-top:10px">ON SCREEN NOW <span id="budSceneN" style="margin-left:auto">LIVE</span></div>
+    <div class="two" style="grid-template-columns:1fr 1fr 1fr"><button class="mini sel" data-scene="live">LIVE</button><button class="mini" data-scene="welcome">WELCOME VIDEO</button><button class="mini" data-scene="gems">GEMS VIDEO</button></div>
     <div class="two"><button class="mini" id="budTest">TEST VOICE</button><button class="mini shut" id="budShut">SHUT UP</button></div>
     <div class="meter"><i id="budLevel"></i></div>
     <div id="budLog">Ears are off. Turn them on from the device whose microphone is in the room with your speakers.</div>
@@ -263,6 +265,7 @@ $("whSpin").onclick = async () => {
   whArmed = 0; whBusy = true; whLabel();
   const who = $("artist").value.trim() || "Unknown artist";
   try { const j = await wheelPost({ spin: { winner: who, song: $("song").value.trim(), song_id: S.songId || "" } });
+    Object.assign(wheelNote, { who, prize: j.spin.prize, rare: !!j.spin.rare, at: Date.now(), reacted: false });
     whSay("Spinning… " + who + " is getting: " + j.spin.prize + (j.spin.rare ? "  (JACKPOT)" : ""), "var(--gold)");
     // about a minute later, email the winner their claim link if they are in the Nero fan list (the admin page also does this whenever it is open)
     setTimeout(() => fetch("https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-wheel-mail", { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ auto: true }) }).catch(() => {}), 60000);
@@ -286,7 +289,31 @@ const LOUD = 0.02, MAX_MS = 10000;                    // how loud counts as "som
 const budSay = (t, cls) => { const el = $("budStatus"); el.textContent = t; el.className = "pill " + (cls || ""); };
 function budLog(kind, text) { bud.lines.push((kind ? "<b>" + kind + "</b> " : "") + String(text).replace(/</g, "&lt;")); bud.lines = bud.lines.slice(-5); $("budLog").innerHTML = bud.lines.join("\n"); }
 const b64 = o => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+/* What is on screen besides the live room, so the buddy reacts to it properly: a video illmind is playing (he taps a button
+   when he starts one; it goes back to LIVE by itself when the video is over) and the prize wheel (set when he spins it). */
+const SCENES = { live: ["LIVE", 0, ""],
+  welcome: ["WELCOME VIDEO", 135, "ON SCREEN RIGHT NOW: the 2-minute WELCOME VIDEO with Chip Sterling is playing. Every voice you hear is the video, not illmind talking to you."],
+  gems: ["GEMS VIDEO", 9 * 60, "ON SCREEN RIGHT NOW: the GEMS VIDEO (recorded clips of illmind talking) is playing on the intro / be-right-back screen. illmind's voice is a recording; he is not talking to you."] };
+const scene = { id: "live", at: 0, timer: 0 };
+function setScene(id) {
+  clearTimeout(scene.timer); const was = scene.id; scene.id = id; scene.at = Date.now();
+  document.querySelectorAll("[data-scene]").forEach(b => b.classList.toggle("sel", b.dataset.scene === id)); $("budSceneN").textContent = SCENES[id][0];
+  if (id !== "live") scene.timer = setTimeout(() => setScene("live"), SCENES[id][1] * 1000);
+  else if (was !== "live") scene.ended = { id: was, at: Date.now() };
+}
+document.querySelectorAll("[data-scene]").forEach(b => b.onclick = () => setScene(b.dataset.scene));
+const wheelNote = { who: "", prize: "", rare: false, at: 0, reacted: false };
 function budContext() {
+  let c = budContextBase();
+  if (scene.id !== "live") c = SCENES[scene.id][2] + " It started " + Math.round((Date.now() - scene.at) / 1000) + " seconds ago. " + c;
+  else if (scene.ended && Date.now() - scene.ended.at < 40000) c = "The " + SCENES[scene.ended.id][0] + " just finished and illmind is live again. " + c;
+  const ws = (Date.now() - wheelNote.at) / 1000;
+  if (wheelNote.at && ws < 150) c = "PRIZE WHEEL: " + Math.round(ws) + " seconds ago illmind spun the prize wheel for " + wheelNote.who + ". " +
+    (ws < 10 ? "It is still spinning; do not reveal the result yet. (It will land on: " + wheelNote.prize + ".)" :
+      "It landed on: " + wheelNote.prize + (wheelNote.rare ? " (THE JACKPOT, the rarest prize)" : "") + ". " + (ws < 45 ? "Chip Sterling's prize video is playing on a TV on screen now, so the announcer voice and cheering you hear are that video." : "Chip's prize video has finished.") + (wheelNote.reacted ? "" : " React to this win.")) + " " + c;
+  return c;
+}
+function budContextBase() {
   let c = nero ? `Now playing on Nero: "${nero.song}" by ${nero.name}${nero.tier && nero.tier !== "standard" ? " (paid " + nero.tier + ")" : ""}.` : "Nothing is playing on Nero right now.";
   const sc = Object.entries(S.scores).filter(([, v]) => typeof v === "number").map(([k, v]) => `${k} ${v}`);
   if (sc.length) c += ` illmind's rating so far: ${sc.join(", ")}${typeof S.overall === "number" ? ", overall " + S.overall : ""}.`;
@@ -294,6 +321,7 @@ function budContext() {
 }
 async function budSpeak(j) {                           // hand a finished line to the overlay, and stop listening while it talks
   bud.lastSpoke = Date.now(); bud.speakingUntil = Date.now() + (j.dur + 1.2) * 1000; bud.tainted = true;
+  if (wheelNote.at && Date.now() - wheelNote.at > 10000) wheelNote.reacted = true;
   bud.history.push("[you said] " + j.say); budLog("SAID", j.say); budSay("TALKING", "air");
   const url = j.url + "#v=" + ((+$("budVol").value) / 100).toFixed(2);          // the overlay reads its volume from the end of the link
   await fetch(STATE_URL, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ buddy: { url, text: j.say, dur: j.dur } }) }).catch(() => {});
@@ -304,6 +332,8 @@ async function budSend(blob, ms) {
   try {
     const meta = { dial: +$("budDial").value, name: $("budName").value.trim() || "Ape", character: "ape", voice: $("budVoice").value, sec: Math.round(ms / 1000),
                    sinceSpoke: bud.lastSpoke ? (Date.now() - bud.lastSpoke) / 1000 : 999, history: bud.history.slice(-12), context: budContext() };
+    const wsec = (Date.now() - wheelNote.at) / 1000;
+    if (wheelNote.at && !wheelNote.reacted && wsec > 10 && wsec < 90) meta.force = true;      // a wheel win is worth a line even if he spoke a moment ago
     const r = await fetch(BRAIN, { method: "POST", headers: { "content-type": bud.mime.split(";")[0], "x-rating-key": KEY, "x-meta": b64(meta) }, body: blob });
     const j = await r.json();
     if (!j.ok) { budLog("ERROR", j.error === "daily_cap" ? "Daily limit reached. Ears are off until tomorrow." : j.error); if (j.error === "daily_cap") budStop(); return; }

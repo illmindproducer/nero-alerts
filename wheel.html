@@ -53,6 +53,7 @@
   #tv { position: fixed; left: 50%; top: 50%; height: min(94vh, 98vw); aspect-ratio: 961 / 1002; transform: translate(-50%, -50%) scale(.2); opacity: 0; pointer-events: none; will-change: transform, opacity; }
   #tv .scr { position: absolute; left: 8.9%; top: 27%; width: 66.8%; height: 53.7%; background: #050505; overflow: hidden; border-radius: 9% / 11%; }
   #tv .pic { position: absolute; inset: 0; transform-origin: 50% 50%; }
+  #tv canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
   #tv video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 35%; transform-origin: 50% 50%; }
   #tv .glass { position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 1px, rgba(0,0,0,0) 1px 3px), radial-gradient(ellipse at 30% 18%, rgba(255,255,255,.16), rgba(255,255,255,0) 45%), radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 62%, rgba(0,0,0,.5)); }
   #tv .line { position: absolute; inset: 0; background: #fff; opacity: 0; }
@@ -77,7 +78,7 @@
 <div id="who">SPINNING FOR <b id="whoName"></b></div>
 <div id="flash"></div>
 <div id="win"><div class="k" id="winK">WINNER</div><div class="name" id="winName"></div><div class="wins">WINS</div><div class="prize" id="winPrize"></div><div class="val" id="winVal"></div></div>
-<div id="tv"><div class="scr"><div class="pic" id="tvPic"></div><div class="glass"></div><div class="line" id="tvLine"></div></div><img src="prize/tv.webp" alt=""></div>
+<div id="tv"><div class="scr"><div class="pic" id="tvPic"><canvas id="tvCan"></canvas></div><div class="glass"></div><div class="line" id="tvLine"></div></div><img src="prize/tv.webp" alt=""></div>
 <div id="dbg"></div>
 <script>
 /* Prize wheel overlay. The control page sends show / spin / hide; the prize is picked by the server BEFORE the wheel
@@ -213,7 +214,7 @@ function cfFrame(now) {
    The video is picked from the prize's name, so a renamed prize still finds it; a prize with no video simply skips this.
    Add ?video=0 to the link to switch the videos off. */
 const PRIZE_VIDEOS = [[/throne/i, "throne"], [/beat/i, "beat"], [/sound\s*pack/i, "soundpack"], [/zoom|video call|1[\s-]*on[\s-]*1|one on one/i, "zoom"], [/vip|club/i, "vip"], [/insta|shout/i, "instagram"]];
-function prizeVideo(sp) { if (qs.get("video") === "0") return null; const t = (sp.name || "") + " " + (sp.label || ""), m = PRIZE_VIDEOS.find(([re]) => re.test(t)); return m ? "prize/" + m[1] + ".webm?v=2" : null; }   // bump v when the files change, so nobody gets a stale copy
+function prizeVideo(sp) { if (qs.get("video") === "0") return null; const t = (sp.name || "") + " " + (sp.label || ""), m = PRIZE_VIDEOS.find(([re]) => re.test(t)); return m ? "prize/" + m[1] + ".webm?v=3" : null; }   // bump v when the files change, so nobody gets a stale copy
 let tvOn = false, pv = null;
 /* A brand-new player for every win. Reusing one player left it shrunk to nothing after the switch-off effect, and the
    browser inside Streamlabs then kept the sound going but stopped drawing the picture. */
@@ -222,7 +223,26 @@ function newVideo(src, at) {
   const old = pv, v = pv = document.createElement("video");
   v.playsInline = true; v.preload = "auto"; v.src = src; $("tvPic").appendChild(v); v.load();
   if (at) v.addEventListener("loadedmetadata", () => { try { v.currentTime = at; } catch (e) {} }, { once: true });
+  const can = $("tvCan"); can.getContext("2d").clearRect(0, 0, can.width, can.height);   // never show the last prize's final frame
   dropVideo(old); return v;
+}
+/* A second way onto the screen: every frame is also painted onto a canvas lying over the player. The browser inside
+   Streamlabs sometimes plays the sound but never draws the player itself; a canvas is drawn the ordinary way, so one of
+   the two shows. If the canvas only ever gets pure black, it steps aside and leaves the player showing. */
+const tiny = document.createElement("canvas"); tiny.width = tiny.height = 8; const tctx = tiny.getContext("2d", { willReadFrequently: true });
+function mirror(v, my) {
+  const can = $("tvCan"), box = can.getBoundingClientRect(), ctx = can.getContext("2d"); let n = 0, black = 0;
+  can.width = 720; can.height = Math.max(2, Math.round(720 * (box.height || 388) / (box.width || 463))); can.style.display = "";
+  (function frame() {
+    if (my !== runId || pv !== v || !tvOn) return;
+    if (v.readyState >= 2 && v.videoWidth) { try {
+      const sh = v.videoWidth * can.height / can.width, sy = Math.max(0, (v.videoHeight - sh) * 0.35);   // same crop as the player: fill the screen, a little above centre
+      ctx.drawImage(v, 0, sy, v.videoWidth, Math.min(sh, v.videoHeight), 0, 0, can.width, can.height);
+      if (++n % 24 === 0) { tctx.drawImage(v, 0, 0, 8, 8); const d = tctx.getImageData(0, 0, 8, 8).data; let sum = 0; for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2];
+        black = sum ? 0 : black + 1; can.style.display = black >= 3 ? "none" : ""; }
+    } catch (e) { can.style.display = "none"; return; } }
+    requestAnimationFrame(frame);
+  })();
 }
 function resetPic() { const pic = $("tvPic"); pic.getAnimations().forEach(a => a.cancel()); pic.style.transform = ""; }
 function tvOff(fast) {                                         // picture collapses to a line, then the set leaves
@@ -245,11 +265,11 @@ async function playTv(src, my) {
   let finish; const done = new Promise(res => { finish = res; setTimeout(res, 24000); });
   const start = async x => { x.volume = vol; x.muted = false; x.onended = finish; x.onerror = finish;
     try { await x.play(); } catch (e) { x.muted = true; try { await x.play(); } catch (y) {} } };   // an ordinary browser may refuse sound until clicked
-  await start(v);
+  await start(v); mirror(v, my);
   // safety net: sound running but not one frame of picture decoded after two seconds, so swap in a fresh player at the same spot
   setTimeout(() => { if (my !== runId || pv !== v || v.paused || v.currentTime < 1) return;
     const q = v.getVideoPlaybackQuality ? v.getVideoPlaybackQuality().totalVideoFrames : 1;
-    if (!v.videoWidth || !q) { v = newVideo(src, v.currentTime); start(v); } }, 2200);
+    if (!v.videoWidth || !q) { v = newVideo(src, v.currentTime); start(v); mirror(v, my); } }, 2200);
   await done; if (my !== runId) return;
   tvOff(false); await wait(650); if (my !== runId) return;
   hide();

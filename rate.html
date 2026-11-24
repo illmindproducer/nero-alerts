@@ -123,6 +123,7 @@
   <div class="sfx">
     <h2>PRIZE WHEEL <span style="display:flex;gap:6px"><button id="whShow" style="border-color:var(--green);color:var(--green)">SHOW</button><button id="whHide">HIDE</button></span></h2>
     <button id="whSpin" style="width:100%;height:58px;border-radius:12px;border:1px solid var(--gold);background:linear-gradient(160deg,#2a2105,#120e02);color:var(--gold);font:400 24px/1 Impact,Haettenschweiler,'Arial Narrow Bold',sans-serif;letter-spacing:.08em;cursor:pointer">SPIN FOR THIS ARTIST</button>
+    <button id="whTest" class="mini" style="width:100%;margin-top:8px">TEST SPIN (nothing saved, nobody emailed)</button>
     <div id="whOut" style="margin-top:8px;font-size:12px;color:var(--dim);line-height:1.5">Spins for whoever is in the NOW PLAYING box above. The prize is saved in ADMIN.</div>
   </div>
   <div class="sfx bud">
@@ -267,8 +268,7 @@ $("whSpin").onclick = async () => {
   try { const j = await wheelPost({ spin: { winner: who, song: $("song").value.trim(), song_id: S.songId || "" } });
     Object.assign(wheelNote, { who, prize: j.spin.prize, rare: !!j.spin.rare, at: Date.now(), reacted: false });
     whSay("Spinning… " + who + " is getting: " + j.spin.prize + (j.spin.rare ? "  (JACKPOT)" : ""), "var(--gold)");
-    // about a minute later, email the winner their claim link if they are in the Nero fan list (the admin page also does this whenever it is open)
-    setTimeout(() => fetch("https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-wheel-mail", { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ auto: true }) }).catch(() => {}), 60000);
+    // the winner's claim email goes out by itself about a minute later (the database sends it; this page does not need to stay open)
   }
   catch (e) { whSay("Spin failed: " + e.message, "var(--red)"); }
   setTimeout(() => { whBusy = false; whLabel(); }, 12000);
@@ -326,6 +326,14 @@ async function budSpeak(j) {                           // hand a finished line t
   const url = j.url + "#v=" + ((+$("budVol").value) / 100).toFixed(2);          // the overlay reads its volume from the end of the link
   await fetch(STATE_URL, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ buddy: { url, text: j.say, dur: j.dur } }) }).catch(() => {});
 }
+/* A practice spin: the wheel does everything it does for a real one on stream, but no winner is saved and nobody is emailed. */
+$("whTest").onclick = async () => {
+  if (whBusy) return; whBusy = true; whLabel();
+  try { const j = await wheelPost({ spin: { winner: $("artist").value.trim() || "Test Artist", song: $("song").value.trim(), test: true } });
+    whSay("TEST spin: landed on " + j.spin.prize + (j.spin.rare ? "  (JACKPOT)" : "") + ". Nothing was saved and nobody gets an email."); }
+  catch (e) { whSay("Test spin failed: " + e.message, "var(--red)"); }
+  setTimeout(() => { whBusy = false; whLabel(); }, 12000);
+};
 async function budSend(blob, ms) {
   if (bud.inflight >= 2) return;                       // never pile up requests
   bud.inflight++; if (Date.now() > bud.speakingUntil) budSay("THINKING");

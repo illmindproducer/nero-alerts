@@ -40,6 +40,7 @@
   <p class="sub" id="sub"></p>
   <form id="form" style="display:none" novalidate></form>
   <div class="msg" id="msg"></div>
+  <div id="deliver" style="display:none;margin-top:14px;padding:14px 16px;border-radius:10px;border:1px solid var(--gold, #e2a400);line-height:1.5;word-break:break-word"></div>
   <p class="fine" id="fine" style="display:none">Your details are used only to get this prize to you and are never shown on stream.</p>
 </main>
 <script>
@@ -61,6 +62,14 @@ const F = {
 };
 const INTRO = { physical: "Tell us where to ship it.", digital: "Tell us where to send it.", call: "Tell us when you are free and we will set it up.", membership: "Tell us which email to set your membership up under.",
   social: "Tell us your handle so the follow and shout out go to the right account.", submission: "Tell us which Nero account gets the free submission." };
+/* Some prizes deliver themselves: once the form is in, the winner is shown the link (or instructions) right here. Built with text nodes only. */
+function showDeliver(text) {
+  if (!text) return; const box = $("deliver"); box.textContent = "";
+  box.append(Object.assign(document.createElement("b"), { textContent: "HERE'S YOUR PRIZE" }), document.createElement("br"));
+  text.split(/(https?:\/\/[^\s]+)/g).forEach(part => { if (/^https?:\/\//.test(part)) box.append(Object.assign(document.createElement("a"), { href: part, textContent: part, target: "_blank", rel: "noopener", style: "color:inherit" }));
+    else part.split("\n").forEach((ln, i) => { if (i) box.append(document.createElement("br")); box.append(ln); }); });
+  box.style.display = "block";
+}
 const say = (t, cls) => { $("msg").textContent = t; $("msg").className = "msg " + (cls || ""); };
 function field([key, label, type, req, half]) {
   const tag = type === "area" ? `<textarea name="${key}" ${req ? "required" : ""} maxlength="400"></textarea>` : `<input name="${key}" type="${type}" ${req ? "required" : ""} maxlength="200" autocomplete="${{ name: "name", email: "email", address1: "address-line1", address2: "address-line2", city: "address-level2", state: "address-level1", zip: "postal-code", country: "country-name", phone: "tel" }[key] || "off"}">`;
@@ -71,7 +80,8 @@ function field([key, label, type, req, half]) {
   let j; try { j = await (await fetch(WHEEL_URL + "?claim=" + encodeURIComponent(TOKEN), { cache: "no-store" })).json(); } catch (e) { $("title").textContent = "Could not load"; $("sub").textContent = "Check your connection and reload the page."; return; }
   if (!j.ok) { $("title").textContent = "This link is not valid"; $("sub").textContent = "Open the link from your email again, or reply to that email for help."; return; }
   $("title").textContent = "You won: " + j.prize;
-  if (j.closed) { $("sub").textContent = "This prize has already been sent. Reply to the email you got if something is wrong."; return; }
+  if (j.closed) { $("sub").textContent = j.deliver ? "You're all set. It was also emailed to you." : "This prize has already been sent. Reply to the email you got if something is wrong."; showDeliver(j.deliver); return; }
+  if (j.claimed) showDeliver(j.deliver);
   const sub = $("sub"); sub.textContent = "";
   sub.append("Congrats", j.winner ? ", " : "", Object.assign(document.createElement("b"), { textContent: j.winner || "" }), "! ", INTRO[j.kind] || "Fill this in to claim it.", j.claimed ? " You already sent your details; sending again replaces them." : "");
   const fields = [F.name, F.email, ...(F[j.kind] || [])].map(field); let html = "";
@@ -85,7 +95,7 @@ function field([key, label, type, req, half]) {
     const btn = form.querySelector("button"); btn.disabled = true; btn.textContent = "SENDING…"; say("");
     try { const r = await (await fetch(WHEEL_URL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ claim: { token: TOKEN, data } }) })).json();
       if (!r.ok) throw new Error(r.error || "It didn't go through.");
-      form.style.display = "none"; $("fine").style.display = "none"; $("sub").textContent = ""; say("Got it. Your details are in, and illmind will be in touch about your prize.", "ok");
+      form.style.display = "none"; $("fine").style.display = "none"; $("sub").textContent = ""; say(r.deliver ? "Got it. Your prize is below, and it's on its way to your email too." : "Got it. Your details are in, and illmind will be in touch about your prize.", "ok"); showDeliver(r.deliver);
     } catch (x) { btn.disabled = false; btn.textContent = "CLAIM MY PRIZE"; say(x.message + " Please try again.", "err"); }
   };
 })();

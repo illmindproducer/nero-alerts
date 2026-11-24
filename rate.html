@@ -136,6 +136,9 @@
       <select id="budVoice"><option>Fenrir</option><option>Charon</option><option>Orus</option><option>Puck</option><option>Algenib</option><option>Enceladus</option><option>Iapetus</option><option>Umbriel</option><option>Rasalgethi</option><option>Kore</option><option>Zephyr</option></select></div>
     <div class="vol" style="margin-top:10px">ON SCREEN NOW <span id="budSceneN" style="margin-left:auto">LIVE</span></div>
     <div class="two" style="grid-template-columns:1fr 1fr 1fr"><button class="mini sel" data-scene="live">LIVE</button><button class="mini" data-scene="welcome">WELCOME VIDEO</button><button class="mini" data-scene="gems">GEMS VIDEO</button></div>
+    <div class="vol" style="margin-top:14px">LIVE CHAT <span id="chatInfo" style="margin-left:auto">OFF</span></div>
+    <button class="big" id="chatBtn" style="margin-top:6px">TURN CHAT REPLIES ON</button>
+    <div class="vol">ANSWERS <input type="range" id="chatDial" min="1" max="10" value="9"> <span id="chatDialN">9</span></div>
     <div class="two"><button class="mini" id="budTest">TEST VOICE</button><button class="mini shut" id="budShut">SHUT UP</button></div>
     <div class="meter"><i id="budLevel"></i></div>
     <div id="budLog">Ears are off. Turn them on from the device whose microphone is in the room with your speakers.</div>
@@ -432,11 +435,96 @@ try { if (localStorage.getItem("bud_is_chip")) { localStorage.removeItem("bud_is
 try { if (!localStorage.getItem("bud_is_ape")) { localStorage.setItem("bud_is_ape", "1"); localStorage.setItem("bud_name", "Ape"); } } catch (e) {}
 /* illmind's standard settings (2026-11-24): voice Fenrir, chime-in 5, volume 80, mic boost 11. Applied once per device, over whatever was saved before; changes made after that stick. */
 try { if (!localStorage.getItem("bud_defaults_2")) { localStorage.setItem("bud_defaults_2", "1"); localStorage.setItem("bud_voice", "Fenrir"); localStorage.setItem("bud_dial", "5"); localStorage.setItem("bud_vol", "80"); localStorage.setItem("bud_gain", "11"); } } catch (e) {}
-for (const [id, key, show] of [["budDial", "bud_dial", "budDialN"], ["budName", "bud_name"], ["budVoice", "bud_voice"], ["budVol", "bud_vol", "budVolN"], ["budGain", "bud_gain", "budGainN"]]) {
+for (const [id, key, show] of [["budDial", "bud_dial", "budDialN"], ["budName", "bud_name"], ["budVoice", "bud_voice"], ["budVol", "bud_vol", "budVolN"], ["budGain", "bud_gain", "budGainN"], ["chatDial", "chat_dial", "chatDialN"]]) {
   try { const v = localStorage.getItem(key); if (v !== null) $(id).value = v; } catch (e) {}
   if (show) $(show).textContent = $(id).value;
   $(id).addEventListener("input", e => { if (show) $(show).textContent = e.target.value; try { localStorage.setItem(key, e.target.value); } catch (x) {} });
 }
+
+/* ---------------- live chat: the buddy reads it and answers out loud ----------------
+   Nero already gathers the chat from every platform linked to the session (Twitch, Kick, TikTok, YouTube). A small relay
+   passes those comments here; the newest ones go to the buddy's brain a few at a time and it answers one out loud.
+   It only answers comments made after this was switched on, and it waits for the buddy to finish a line before the next.
+   ANSWERS sets the breathing room between replies: 10 = straight away, 9 = about 5 seconds, 1 = about 35 seconds. */
+const CHAT_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-chat";
+const CHAT_BOTS = /^(nightbot|streamelements|streamlabs|moobot|fossabot|wizebot|botrix|kickbot|soundalerts|sery_bot|restreambot|cloudbot)$/i;
+const chat = { on: false, gen: 0, first: true, seen: new Set(), q: [], plat: {}, ctls: new Set(), busy: false, last: 0, got: 0, said: 0, timer: 0 };
+function chatInfo(note) {
+  const up = Object.entries(chat.plat).filter(([, st]) => st === "connected").map(([p]) => p.toUpperCase());
+  $("chatInfo").textContent = !chat.on ? "OFF" : note || ((up.length ? up.join(" + ") : "WAITING FOR CHAT") + (chat.got ? " · " + chat.got + " comments, " + chat.said + " replies" : ""));
+}
+function chatTake(m, old) {
+  if (!m || !m.id || chat.seen.has(m.id)) return; chat.seen.add(m.id);
+  if (old) return;                                     // it was said before chat replies were switched on
+  const text = String(m.text || "").trim(), author = String(m.author || "someone");
+  if (!text || text[0] === "!" || CHAT_BOTS.test(author)) return;             // bot commands and bots are not for him
+  chat.got++; chat.q.push({ platform: m.platform || "chat", author, text, at: Date.now() }); if (chat.q.length > 12) chat.q.splice(0, chat.q.length - 12);
+  bud.history.push("[chat] " + author + ": " + text.slice(0, 120)); bud.history = bud.history.slice(-20);   // the ears know what chat is saying too
+  budLog("CHAT", author + " · " + (m.platform || "") + ": " + text); chatInfo();
+}
+function chatLine(line) {
+  let o; try { o = JSON.parse(line); } catch (e) { return; }
+  if (o.t === "msg") { chat.first = false; chatTake(o); }
+  else if (o.t === "backfill") { const old = chat.first; chat.first = false; (o.msgs || []).forEach(m => chatTake(m, old)); }
+  else if (o.t === "status") { if (o.platform === "all") chat.plat = {}; else chat.plat[o.platform] = o.state; chatInfo(); }
+}
+/* One connection lasts about 100 seconds. The next one is opened 10 seconds before that, so the two overlap and no comment
+   falls in between; a comment that arrives on both is only counted once. */
+function chatConn(gen, fails) {
+  if (!chat.on || gen !== chat.gen) return;
+  let next = false, got = false, t = 0; const ctl = new AbortController(); chat.ctls.add(ctl);
+  const spawn = f => { if (next) return; next = true; chatConn(gen, f); };
+  (async () => {
+    try {
+      const r = await fetch(CHAT_URL + "?t=" + Date.now(), { headers: { "x-rating-key": KEY }, signal: ctl.signal, cache: "no-store" });
+      if (r.status === 401) { chatStop(); budLog("ERROR", "Chat: this device's control key was not accepted."); return; }
+      if (!r.ok || !r.body) throw new Error("chat feed " + r.status);
+      t = setTimeout(() => spawn(0), 90000);
+      const rd = r.body.getReader(), dec = new TextDecoder(); let buf = "";
+      for (;;) { const { done, value } = await rd.read(); if (done) break; buf += dec.decode(value, { stream: true });
+        let i; while ((i = buf.indexOf("\n")) >= 0) { const line = buf.slice(0, i); buf = buf.slice(i + 1); if (line) { got = true; chatLine(line); } } }
+    } catch (e) {}
+    clearTimeout(t); chat.ctls.delete(ctl);
+    if (!chat.on || gen !== chat.gen || next) return;
+    const f = got ? 0 : (fails || 0) + 1; if (f > 1) { chat.plat = {}; chatInfo("RECONNECTING"); }
+    setTimeout(() => spawn(f), got ? 300 : Math.min(15000, 1500 * f));
+  })();
+}
+async function chatAnswer(batch) {
+  chat.busy = true; bud.inflight++; if (Date.now() > bud.speakingUntil) budSay("READING CHAT");
+  try {
+    const body = { chat: batch.map(({ platform, author, text }) => ({ platform, author, text })), name: $("budName").value.trim() || "Ape", character: "ape", voice: $("budVoice").value,
+                   history: bud.history.slice(-12), context: budContext() };
+    const j = await (await fetch(BRAIN, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify(body) })).json();
+    if (!j.ok) { budLog("ERROR", j.error === "daily_cap" ? "Daily limit reached. Chat replies are off until tomorrow." : j.error); if (j.error === "daily_cap") chatStop(); return; }
+    if (!j.url && j.voice_error) budLog("ERROR", "Had a reply for chat but no voice was available: " + j.voice_error);
+    if (j.url && chat.on) {
+      for (let i = 0; i < 40 && Date.now() < bud.speakingUntil; i++) await new Promise(r => setTimeout(r, 300));   // let a line already being spoken finish
+      if (chat.on) { await budSpeak(j); chat.said++; }
+    }
+  } catch (e) { budLog("ERROR", String(e.message || e)); }
+  finally { chat.busy = false; bud.inflight--; chat.last = Date.now(); chatInfo(); }
+}
+function chatTick() {
+  if (!chat.on) return; const now = Date.now();
+  chat.q = chat.q.filter(m => now - m.at < 90000);                              // a comment older than a minute and a half is old news
+  if (!chat.busy && now > bud.speakingUntil && !bud.on && $("budStatus").textContent !== "CHAT") budSay("CHAT", "air");
+  if (chat.busy || !chat.q.length || bud.inflight >= 2) return;
+  const gap = (10 - +$("chatDial").value) * 4000 + 1500;
+  if (now < bud.speakingUntil + 800 || now - chat.last < gap) return;
+  chatAnswer(chat.q.splice(0, 4));                                              // up to four at a time; he answers the best of them
+}
+function chatStart() {
+  if (!KEY) return gate(true);
+  chat.on = true; chat.gen++; chat.first = true; chat.q = []; chat.plat = {}; chat.got = 0; chat.said = 0; chat.last = 0;
+  $("chatBtn").classList.add("on"); $("chatBtn").textContent = "CHAT REPLIES ON · TAP TO TURN OFF"; chatInfo("CONNECTING"); budLog("", "Reading chat. New comments show up here.");
+  chatConn(chat.gen, 0); clearInterval(chat.timer); chat.timer = setInterval(chatTick, 700);
+}
+function chatStop() {
+  chat.on = false; chat.gen++; clearInterval(chat.timer); chat.ctls.forEach(c => { try { c.abort(); } catch (e) {} }); chat.ctls.clear(); chat.q = [];
+  $("chatBtn").classList.remove("on"); $("chatBtn").textContent = "TURN CHAT REPLIES ON"; chatInfo(); if (!bud.on) budSay("OFF");
+}
+$("chatBtn").onclick = () => chat.on ? chatStop() : chatStart();
 
 /* ---- controls ---- */
 $("show").onclick = () => { S.visible = !S.visible; paint(); push(); };

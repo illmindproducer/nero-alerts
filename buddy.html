@@ -61,17 +61,18 @@ const head = $("head"), m = [$("m0"), $("m1"), $("m2"), $("blink")], dbg = $("db
 if (qs.has("debug")) dbg.style.display = "block";
 if (qs.get("captions") === "0") document.body.classList.add("nocap");          // ?captions=0 hides them
 
-/* Which character is on screen. The helmet (Trooper) is the default; add ?look=chip for Chip, the game-show host.
+/* Which character is on screen. Ape is the default; add ?look=trooper for the helmet or ?look=chip for Chip, the game-show host.
    Each look is four drawings of the same head: mouth shut / half open / wide open / eyes closed. */
 const LOOKS = {
-  chip:    { dir: "buddy/chip/", ratio: "917 / 900", lamps: false, squash: 0.35, origin: "50% 70%" },
+  ape:     { dir: "buddy/ape/",  ratio: "685 / 900", lamps: false, squash: 0.35, origin: "50% 72%", fade: [90, 100] },
+  chip:    { dir: "buddy/chip/", ratio: "917 / 900", lamps: false, squash: 0.35, origin: "50% 70%", fade: [78, 98] },
   trooper: { dir: "buddy/",      ratio: "776 / 900", lamps: true,  squash: 1,    origin: "50% 92%" },
 };
-const LOOK = LOOKS[qs.get("look")] || LOOKS.trooper;
-if (!LOOK.lamps) document.body.classList.add("bubble");      // Chip's captions go in a thought bubble above him
+const LOOK = LOOKS[qs.get("look")] || LOOKS.ape;
+if (!LOOK.lamps) document.body.classList.add("bubble");      // Ape's and Chip's captions go in a thought bubble above the head
 ["m0", "m1", "m2", "blink"].forEach((n, i) => { m[i].src = LOOK.dir + n + ".webp"; });
 head.style.aspectRatio = LOOK.ratio; head.style.transformOrigin = LOOK.origin;
-if (!LOOK.lamps) { const fade = "linear-gradient(to bottom, #000 78%, rgba(0,0,0,0) 98%)"; head.style.webkitMaskImage = fade; head.style.maskImage = fade; }   // Chip's shoulders fade out instead of ending in a hard edge
+if (!LOOK.lamps) { const fade = "linear-gradient(to bottom, #000 " + LOOK.fade[0] + "%, rgba(0,0,0,0) " + LOOK.fade[1] + "%)"; head.style.webkitMaskImage = fade; head.style.maskImage = fade; }   // Chip's shoulders fade out instead of ending in a hard edge
 /* where the lights are on the helmet drawing, in % of its width / height: [name, x, y, size] */
 const LAMPS = LOOK.lamps ? [["antenna", 49.8, 6.6, 46], ["eyeL", 36.3, 60.1, 50], ["eyeR", 66.1, 63.1, 38], ["cheekL", 20.1, 77.8, 26], ["cheekR", 79.2, 77.9, 26], ["mouth", 50, 80.5, 44]] : [];
 const lamp = {}; for (const [k, x, y, z] of LAMPS) { const d = document.createElement("div"); d.className = "lamp"; d.style.left = x + "%"; d.style.top = y + "%"; d.style.width = z + "%"; d.style.aspectRatio = "1"; head.appendChild(d); lamp[k] = d; }
@@ -200,6 +201,7 @@ async function poll() {
 }
 if (qs.has("demo")) { document.body.style.background = "#1a1d24"; addEventListener("pointerdown", () => { try { ac().resume(); } catch (e) {} }, { once: true });
   (async function loop() { try { await (LOOK.lamps ? say("buddy/demo.mp3", "Yo chat, I'm online. Illmind, that last beat? The drums were crazy. But that mix... needs some help, my guy.")
+    : LOOK === LOOKS.ape ? say("buddy/ape/demo.wav#v=0.9", "Oh good, another type beat. Wake me up when the drums show up, yeah?")
     : say("buddy/chip/demo.wav#v=0.9", "Hello everybody, and welcome to The Feedback Loop! I'm your host, Chip Sterling. Now THAT is a hit!")); } catch (e) { dbg.textContent = "demo failed: " + e; } setTimeout(loop, 3500); })(); }
 else poll();
 </script>

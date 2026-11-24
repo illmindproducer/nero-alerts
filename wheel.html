@@ -214,7 +214,7 @@ function cfFrame(now) {
    The video is picked from the prize's name, so a renamed prize still finds it; a prize with no video simply skips this.
    Add ?video=0 to the link to switch the videos off. */
 const PRIZE_VIDEOS = [[/throne/i, "throne"], [/beat/i, "beat"], [/sound\s*pack/i, "soundpack"], [/zoom|video call|1[\s-]*on[\s-]*1|one on one/i, "zoom"], [/vip|club/i, "vip"], [/insta|shout/i, "instagram"]];
-function prizeVideo(sp) { if (qs.get("video") === "0") return null; const t = (sp.name || "") + " " + (sp.label || ""), m = PRIZE_VIDEOS.find(([re]) => re.test(t)); return m ? "prize/" + m[1] + ".webm?v=3" : null; }   // bump v when the files change, so nobody gets a stale copy
+function prizeVideo(sp) { if (qs.get("video") === "0") return null; const t = (sp.name || "") + " " + (sp.label || ""), m = PRIZE_VIDEOS.find(([re]) => re.test(t)); return m ? "prize/" + m[1] + ".webm?v=4" : null; }   // bump v when the files change, so nobody gets a stale copy
 let tvOn = false, pv = null;
 /* A brand-new player for every win. Reusing one player left it shrunk to nothing after the switch-off effect, and the
    browser inside Streamlabs then kept the sound going but stopped drawing the picture. */

@@ -131,8 +131,8 @@
     <div class="vol">CHIME-IN <input type="range" id="budDial" min="0" max="10" value="5"> <span id="budDialN">5</span></div>
     <div class="vol">ITS VOLUME <input type="range" id="budVol" min="0" max="100" value="45"> <span id="budVolN">45</span></div>
     <div class="vol">MIC BOOST <input type="range" id="budGain" min="1" max="12" value="5"> <span id="budGainN">5</span></div>
-    <div class="two"><input type="text" id="budName" value="Trooper" maxlength="20" placeholder="Name it answers to" autocomplete="off">
-      <select id="budVoice"><option>Charon</option><option>Fenrir</option><option>Orus</option><option>Puck</option><option>Algenib</option><option>Enceladus</option><option>Iapetus</option><option>Umbriel</option><option>Rasalgethi</option><option>Kore</option><option>Zephyr</option></select></div>
+    <div class="two"><input type="text" id="budName" value="Chip" maxlength="20" placeholder="Name it answers to" autocomplete="off">
+      <select id="budVoice"><option>Puck</option><option>Charon</option><option>Orus</option><option>Fenrir</option><option>Algenib</option><option>Enceladus</option><option>Iapetus</option><option>Umbriel</option><option>Rasalgethi</option><option>Kore</option><option>Zephyr</option></select></div>
     <div class="two"><button class="mini" id="budTest">TEST VOICE</button><button class="mini shut" id="budShut">SHUT UP</button></div>
     <div class="meter"><i id="budLevel"></i></div>
     <div id="budLog">Ears are off. Turn them on from the device whose microphone is in the room with your speakers.</div>
@@ -302,7 +302,7 @@ async function budSend(blob, ms) {
   if (bud.inflight >= 2) return;                       // never pile up requests
   bud.inflight++; if (Date.now() > bud.speakingUntil) budSay("THINKING");
   try {
-    const meta = { dial: +$("budDial").value, name: $("budName").value.trim() || "Trooper", voice: $("budVoice").value, sec: Math.round(ms / 1000),
+    const meta = { dial: +$("budDial").value, name: $("budName").value.trim() || "Chip", character: "chip", voice: $("budVoice").value, sec: Math.round(ms / 1000),
                    sinceSpoke: bud.lastSpoke ? (Date.now() - bud.lastSpoke) / 1000 : 999, history: bud.history.slice(-12), context: budContext() };
     const r = await fetch(BRAIN, { method: "POST", headers: { "content-type": bud.mime.split(";")[0], "x-rating-key": KEY, "x-meta": b64(meta) }, body: blob });
     const j = await r.json();
@@ -383,11 +383,13 @@ $("budShut").onclick = () => { bud.speakingUntil = Date.now() + 400; fetch(STATE
 $("budTest").onclick = async () => {
   if (!KEY) return gate(true); budLog("", "Making a voice sample…");
   try {
-    const j = await (await fetch(BRAIN, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ say: "Oh good, another type beat. Wake me up when the drums show up.", voice: $("budVoice").value }) })).json();
+    const j = await (await fetch(BRAIN, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ say: "Well hello there, folks! Chip Sterling here, and THAT beat was a certified hit!", voice: $("budVoice").value, character: "chip" }) })).json();
     if (!j.ok) throw new Error(j.error); await budSpeak(j);
   } catch (e) { budLog("ERROR", String(e.message || e)); }
 };
 $("budGain").addEventListener("input", e => { if (bud.gain) bud.gain.gain.value = +e.target.value; });
+/* The buddy is now Chip, the game-show host. Once, on each device, swap the old helmet's saved name and voice for his. */
+try { if (!localStorage.getItem("bud_is_chip")) { localStorage.setItem("bud_is_chip", "1"); localStorage.setItem("bud_name", "Chip"); localStorage.setItem("bud_voice", "Puck"); } } catch (e) {}
 for (const [id, key, show] of [["budDial", "bud_dial", "budDialN"], ["budName", "bud_name"], ["budVoice", "bud_voice"], ["budVol", "bud_vol", "budVolN"], ["budGain", "bud_gain", "budGainN"]]) {
   try { const v = localStorage.getItem(key); if (v !== null) $(id).value = v; } catch (e) {}
   if (show) $(show).textContent = $(id).value;

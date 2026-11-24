@@ -31,7 +31,7 @@
 </head>
 <body>
 <div id="wrap"><div id="head">
-  <img id="m0" src="buddy/m0.webp" alt=""><img id="m1" src="buddy/m1.webp" alt=""><img id="m2" src="buddy/m2.webp" alt=""><img id="blink" src="buddy/blink.webp" alt="">
+  <img id="m0" alt=""><img id="m1" alt=""><img id="m2" alt=""><img id="blink" alt="">
 </div></div>
 <div id="cap"><span id="capText"></span></div>
 <div id="dbg"></div>
@@ -46,8 +46,18 @@ const head = $("head"), m = [$("m0"), $("m1"), $("m2"), $("blink")], dbg = $("db
 if (qs.has("debug")) dbg.style.display = "block";
 if (qs.get("captions") === "0") document.body.classList.add("nocap");          // ?captions=0 hides them
 
-/* where the lights are on the drawing, in % of its width / height: [name, x, y, size] */
-const LAMPS = [["antenna", 49.8, 6.6, 46], ["eyeL", 36.3, 60.1, 50], ["eyeR", 66.1, 63.1, 38], ["cheekL", 20.1, 77.8, 26], ["cheekR", 79.2, 77.9, 26], ["mouth", 50, 80.5, 44]];
+/* Which character is on screen. Chip (the game-show host) is the default; add ?look=trooper for the helmet.
+   Each look is four drawings of the same head: mouth shut / half open / wide open / eyes closed. */
+const LOOKS = {
+  chip:    { dir: "buddy/chip/", ratio: "917 / 900", lamps: false, squash: 0.35, origin: "50% 70%" },
+  trooper: { dir: "buddy/",      ratio: "776 / 900", lamps: true,  squash: 1,    origin: "50% 92%" },
+};
+const LOOK = LOOKS[qs.get("look")] || LOOKS.chip;
+["m0", "m1", "m2", "blink"].forEach((n, i) => { m[i].src = LOOK.dir + n + ".webp"; });
+head.style.aspectRatio = LOOK.ratio; head.style.transformOrigin = LOOK.origin;
+if (!LOOK.lamps) { const fade = "linear-gradient(to bottom, #000 78%, rgba(0,0,0,0) 98%)"; head.style.webkitMaskImage = fade; head.style.maskImage = fade; }   // Chip's shoulders fade out instead of ending in a hard edge
+/* where the lights are on the helmet drawing, in % of its width / height: [name, x, y, size] */
+const LAMPS = LOOK.lamps ? [["antenna", 49.8, 6.6, 46], ["eyeL", 36.3, 60.1, 50], ["eyeR", 66.1, 63.1, 38], ["cheekL", 20.1, 77.8, 26], ["cheekR", 79.2, 77.9, 26], ["mouth", 50, 80.5, 44]] : [];
 const lamp = {}; for (const [k, x, y, z] of LAMPS) { const d = document.createElement("div"); d.className = "lamp"; d.style.left = x + "%"; d.style.top = y + "%"; d.style.width = z + "%"; d.style.aspectRatio = "1"; head.appendChild(d); lamp[k] = d; }
 
 let AC = null;
@@ -129,19 +139,21 @@ function frame(now) {
   // 4. is music playing? ease in and out of the bop so it never snaps
   const on = Date.now() < music.until; music.amt += ((on ? 1 : 0) - music.amt) * 0.05; const B = music.amt;
   const beat = Math.abs(Math.sin(s * Math.PI * 1.95)), hit = Math.pow(1 - beat, 3);     // "hit" spikes once per nod, at the bottom of it
-  // 5. lights: a slow idle pulse, brighter with his voice, and flashing with the nod when music is on
-  const idle = 0.5 + 0.5 * Math.sin(s * 2.1), v = Math.min(1, L * 1.4);
-  lamp.antenna.style.opacity = Math.min(1, 0.25 + 0.3 * idle + v * 0.7 + B * hit * 0.9).toFixed(3);
-  const eye = blinking ? 0 : Math.min(1, 0.12 + 0.12 * idle + v * 0.55 + B * hit * 0.4).toFixed(3); lamp.eyeL.style.opacity = eye; lamp.eyeR.style.opacity = eye;
-  const side = Math.sin(s * Math.PI * 1.95) > 0;                                        // cheeks take turns on the beat
-  lamp.cheekL.style.opacity = Math.min(1, 0.15 + v * 0.5 + B * (side ? 0.9 : 0.05) * (0.4 + 0.6 * hit)).toFixed(3);
-  lamp.cheekR.style.opacity = Math.min(1, 0.15 + v * 0.5 + B * (side ? 0.05 : 0.9) * (0.4 + 0.6 * hit)).toFixed(3);
-  lamp.mouth.style.opacity = (open ? Math.min(1, 0.25 + v * 0.75) : 0).toFixed(3);
+  // 5. lights (helmet only): a slow idle pulse, brighter with his voice, and flashing with the nod when music is on
+  if (LOOK.lamps) {
+    const idle = 0.5 + 0.5 * Math.sin(s * 2.1), v = Math.min(1, L * 1.4);
+    lamp.antenna.style.opacity = Math.min(1, 0.25 + 0.3 * idle + v * 0.7 + B * hit * 0.9).toFixed(3);
+    const eye = blinking ? 0 : Math.min(1, 0.12 + 0.12 * idle + v * 0.55 + B * hit * 0.4).toFixed(3); lamp.eyeL.style.opacity = eye; lamp.eyeR.style.opacity = eye;
+    const side = Math.sin(s * Math.PI * 1.95) > 0;                                        // cheeks take turns on the beat
+    lamp.cheekL.style.opacity = Math.min(1, 0.15 + v * 0.5 + B * (side ? 0.9 : 0.05) * (0.4 + 0.6 * hit)).toFixed(3);
+    lamp.cheekR.style.opacity = Math.min(1, 0.15 + v * 0.5 + B * (side ? 0.05 : 0.9) * (0.4 + 0.6 * hit)).toFixed(3);
+    lamp.mouth.style.opacity = (open ? Math.min(1, 0.25 + v * 0.75) : 0).toFixed(3);
+  }
   // 6. body language: a lazy float and sway; squash and stretch while talking; a head-nod bop while music plays
   const floatY = Math.sin(s * 1.5) * 2.2 + Math.sin(s * 0.63) * 1.1, sway = Math.sin(s * 0.8) * 3 + Math.sin(s * 2.3) * 0.8;
   const talkY = speaking ? Math.sin(s * 9) * L * 2 : 0, talkR = speaking ? Math.sin(s * 5.3) * L * 4 : 0;
   const bopY = B * (1 - beat) * 7.5, bopR = B * Math.sin(s * Math.PI * 0.975) * 4.5;       // drops on each nod, leans side to side every other one
-  const sx = 1 + L * 0.03 + B * hit * 0.05, sy = 1 + L * 0.07 - B * hit * 0.07;            // wider and shorter at the bottom of a nod
+  const q = LOOK.squash, sx = 1 + (L * 0.03 + B * hit * 0.05) * q, sy = 1 + (L * 0.07 - B * hit * 0.07) * q;            // wider and shorter at the bottom of a nod
   head.style.transform = `translateY(${(floatY * (1 - B * 0.6) + talkY + bopY).toFixed(2)}%) rotate(${(sway * (1 - B * 0.5) + talkR + bopR).toFixed(2)}deg) scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`;
   if (qs.has("debug")) dbg.textContent = `speaking: ${speaking}  level: ${L.toFixed(2)}  mouth: ${open}  music: ${on} (${B.toFixed(2)})  sound blocked: ${talk.blocked}`;
   requestAnimationFrame(frame);
@@ -170,7 +182,8 @@ async function poll() {
   setTimeout(poll, pause);
 }
 if (qs.has("demo")) { document.body.style.background = "#1a1d24"; addEventListener("pointerdown", () => { try { ac().resume(); } catch (e) {} }, { once: true });
-  (async function loop() { try { await say("buddy/demo.mp3", "Yo chat, I'm online. Illmind, that last beat? The drums were crazy. But that mix... needs some help, my guy."); } catch (e) { dbg.textContent = "demo failed: " + e; } setTimeout(loop, 3500); })(); }
+  (async function loop() { try { await (LOOK.lamps ? say("buddy/demo.mp3", "Yo chat, I'm online. Illmind, that last beat? The drums were crazy. But that mix... needs some help, my guy.")
+    : say("buddy/chip/demo.wav#v=0.9", "Hello everybody, and welcome to The Feedback Loop! I'm your host, Chip Sterling. Now THAT is a hit!")); } catch (e) { dbg.textContent = "demo failed: " + e; } setTimeout(loop, 3500); })(); }
 else poll();
 </script>
 </body>

@@ -59,11 +59,34 @@
   #tv .line { position: absolute; inset: 0; background: #fff; opacity: 0; }
   #tv img { position: absolute; inset: 0; width: 100%; height: 100%; }
   #confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  /* the FREE BEAT AWARD: a full-screen takeover with no wheel. Everything moves with transform and opacity only. */
+  #aw { position: fixed; inset: 0; opacity: 0; pointer-events: none; overflow: hidden; display: grid; place-items: center; }
+  #aw .bg { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 46%, rgba(86,50,0,.84), rgba(16,8,0,.94) 60%, rgba(0,0,0,.97)); }
+  #aw .rays { position: absolute; left: 50%; top: 46%; width: 240vmax; height: 240vmax; margin: -120vmax 0 0 -120vmax; border-radius: 50%; opacity: 0; will-change: transform;
+              background: repeating-conic-gradient(from 0deg, rgba(255,214,80,.3) 0deg 6deg, rgba(255,214,80,0) 6deg 20deg); }
+  body.aw #aw .rays { animation: awturn 30s linear infinite; }
+  @keyframes awturn { to { transform: rotate(360deg); } }
+  #aw .in { position: relative; width: min(94vw, 165vh); display: flex; flex-direction: column; align-items: center; text-align: center; will-change: transform, opacity; }
+  #aw .in > * { opacity: 0; will-change: transform, opacity; }
+  #aw .disc { position: relative; width: min(25vh, 34vw); aspect-ratio: 1; border-radius: 50%; margin-bottom: 1.6vh; box-shadow: 0 0 0 .5vh #3a2300, 0 1.4vh 4vh rgba(0,0,0,.75); }
+  #aw .disc b { position: absolute; inset: 0; border-radius: 50%;
+                background: conic-gradient(from 20deg, rgba(255,255,255,.7), rgba(255,255,255,0) 11%, rgba(255,255,255,0) 39%, rgba(255,255,255,.55) 50%, rgba(255,255,255,0) 61%, rgba(255,255,255,0) 89%, rgba(255,255,255,.7)),
+                            repeating-radial-gradient(circle, #f2bd2c 0 1.1%, #b98100 1.1% 2.2%); }
+  body.aw #aw .disc b { animation: awturn 2.6s linear infinite; }
+  #aw .disc i { position: absolute; left: 31%; top: 31%; width: 38%; height: 38%; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: min(2.3vh, 3.1vw); letter-spacing: .02em;
+                color: #ffe27a; background: radial-gradient(circle, #2a1500 0 9%, #7a0f1f 10% 100%); box-shadow: 0 0 0 .3vh #3a2300; }
+  #aw .k { font-size: min(4.4vh, 4vw); letter-spacing: .26em; color: #ffe27a; }
+  #aw .big { font-size: min(16.5vh, 13vw); line-height: .93; margin-top: .8vh; color: #ffd34d; -webkit-text-stroke: .03em #4a2c00; paint-order: stroke fill; text-shadow: 0 .05em 0 #7a4b00, 0 .1em .25em rgba(0,0,0,.8); }
+  #aw .big span { display: block; font-size: 62%; color: #fff; letter-spacing: .12em; }
+  #aw .val { font-size: min(7.4vh, 6.2vw); letter-spacing: .08em; color: #39ff6a; margin-top: 1.4vh; -webkit-text-stroke: .05em #022b0f; paint-order: stroke fill; }
+  #aw .to { font-size: min(3.6vh, 3.2vw); letter-spacing: .34em; color: #e9d9a8; margin-top: 2.2vh; }
+  #aw .nm { font-size: min(11vh, 9vw); line-height: 1.04; color: #fff; margin-top: .4vh; overflow-wrap: anywhere; max-width: 100%; -webkit-text-stroke: .04em #000; paint-order: stroke fill; }
   #dbg { position: fixed; left: 8px; bottom: 8px; font: 12px ui-monospace, Menlo, monospace; color: #7dffa6; background: rgba(0,0,0,.7); padding: 6px 8px; border-radius: 6px; display: none; white-space: pre; }
 </style>
 </head>
 <body>
 <div id="dim"></div>
+<div id="aw"><div class="bg"></div><div class="rays"></div><div class="in"><div class="disc"><b></b><i>!LLMIND</i></div><div class="k">★ THE ULTIMATE PRIZE ★</div><div class="big"><span>FREE</span>ILLMIND BEAT</div><div class="val" id="awVal">$30,000 VALUE</div><div class="to">AWARDED TO</div><div class="nm" id="awName"></div></div></div>
 <canvas id="confetti"></canvas>
 <div id="stage">
   <div id="rig">
@@ -83,7 +106,7 @@
 <script>
 /* Prize wheel overlay. The control page sends show / spin / hide; the prize is picked by the server BEFORE the wheel
    moves, and the wheel is then steered to land on it. All the sound is made here in code, plus a few of the pad sounds.
-   ?demo=1 runs sample spins on a loop (no server)   ?demo=rare shows the jackpot version   ?vol=0..1.5   ?debug=1 */
+   ?demo=1 runs sample spins on a loop (no server)   ?demo=rare shows the jackpot version   ?demo=award shows the FREE BEAT AWARD   ?vol=0..1.5   ?debug=1 */
 const qs = new URLSearchParams(location.search), $ = id => document.getElementById(id);
 const WHEEL_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-wheel";
 const VOL = Math.max(0, Math.min(1.5, parseFloat(qs.get("vol") || "0.8") || 0.8));
@@ -247,12 +270,13 @@ function tvOff(fast) {                                         // picture collap
   if (!fast) { A($("tvPic"), [{ transform: "scale(1, 1)" }, { transform: "scale(1, .02)", offset: 0.6 }, { transform: "scale(0, .02)" }], 260, { easing: "ease-in" }); const t = ac().currentTime; tone(200, t, 0.18, "sine", 0.2, 60); }
   A($("tv"), [{ opacity: 1, transform: "translate(-50%, -50%) scale(1)" }, { opacity: 0, transform: "translate(-50%, -50%) scale(.3)" }], 300, { delay: fast ? 0 : 280, easing: "ease-in" });
 }
-async function playTv(src, my) {
+async function playTv(src, my, awardCard) {               // awardCard: the FREE BEAT AWARD text, which leaves instead of the wheel's winner card (its gold backdrop stays behind the TV)
   const tv = $("tv"); let p = pv; if (!p) p = newVideo(src);
-  A($("win"), [{ opacity: 1, transform: "translate(-50%, -50%) scale(1)" }, { opacity: 0, transform: "translate(-50%, -50%) scale(.6)" }], 250, { easing: "ease-in" });
+  if (awardCard) A(awardCard, [{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(.7)" }], 300, { easing: "ease-in" });
+  else A($("win"), [{ opacity: 1, transform: "translate(-50%, -50%) scale(1)" }, { opacity: 0, transform: "translate(-50%, -50%) scale(.6)" }], 250, { easing: "ease-in" });
   document.body.classList.remove("won"); cf.until = 0;                                   // lights calm down, confetti stops: the TV has the floor
   tvOn = true; resetPic();
-  A($("title"), [{ opacity: 1 }, { opacity: 0 }], 250);                                   // the title would sit behind the antenna
+  if (!awardCard) A($("title"), [{ opacity: 1 }, { opacity: 0 }], 250);                   // the title would sit behind the antenna
   A(tv, [{ opacity: 0, transform: "translate(-50%, -150%) scale(.9) rotate(-6deg)" }, { opacity: 1, transform: "translate(-50%, -50%) scale(1) rotate(0deg)" }], 520);
   const t = ac().currentTime; noise(t + 0.45, 0.5, 0.35, 2500, 5000); tone(90, t + 0.42, 0.12, "square", 0.25, 50);   // a thunk, then a burst of static as it warms up
   A($("tvLine"), [{ opacity: 0, transform: "scale(1, .01)" }, { opacity: 1, transform: "scale(1, .01)", offset: 0.25 }, { opacity: 0.85, transform: "scale(1, 1)", offset: 0.7 }, { opacity: 0, transform: "scale(1, 1)" }], 520, { delay: 430, easing: "ease-out" });
@@ -280,8 +304,9 @@ async function show() {
   whoosh(); requestAnimationFrame(idle);
 }
 function hide() {
-  clearTimeout(hideTimer); runId++; if (!shown) return; shown = false; busy = false;
-  live.forEach(s => { try { s.stop(); } catch (e) {} }); live.clear(); cf.until = 0; tvOff(true);
+  clearTimeout(hideTimer); runId++;
+  live.forEach(s => { try { s.stop(); } catch (e) {} }); live.clear(); cf.until = 0; tvOff(true); awOff();
+  if (!shown) return; shown = false; busy = false;
   $("dim").style.opacity = 0; $("who").style.opacity = 0; document.body.classList.remove("won", "rare", "spin");
   A($("stage"), [{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(.6)" }], 350, { easing: "ease-in" });
   A($("title"), [{ opacity: 1 }, { opacity: 0 }], 250); A($("win"), [{ opacity: 0, transform: "translate(-50%, -50%) scale(.2)" }], 1);
@@ -324,6 +349,58 @@ async function spin(sp) {
   else hideTimer = setTimeout(hide, rare ? 24000 : 16000);     // no video for this prize: leaves by itself if HIDE is never pressed
 }
 
+/* ---------------- the FREE BEAT AWARD ----------------
+   illmind gives the free illmind beat straight to someone: no wheel, no odds. The screen is taken over by a gold award
+   (light rays, a spinning gold record, the prize slammed in, who it goes to), with every sound the jackpot has and more.
+   About ten seconds later the old TV drops in and Chip Sterling's beat video plays, then everything leaves. */
+function awOff() {
+  if (!document.body.classList.contains("aw")) return;
+  document.body.classList.remove("aw"); const aw = $("aw");
+  const f = aw.animate([{ opacity: getComputedStyle(aw).opacity }, { opacity: 0 }], { duration: 380, easing: "ease-in" });
+  f.onfinish = () => { if (!document.body.classList.contains("aw")) aw.getAnimations({ subtree: true }).forEach(a => a.cancel()); };
+}
+async function award(sp) {
+  const my = ++runId; clearTimeout(hideTimer); busy = false; try { ac().resume(); } catch (e) {}
+  live.forEach(s => { try { s.stop(); } catch (e) {} }); live.clear(); cf.until = 0; tvOff(true);
+  const aw = $("aw"), q = sel => aw.querySelector(sel), pop = "cubic-bezier(.2,1.5,.3,1)";
+  aw.getAnimations({ subtree: true }).forEach(a => a.cancel());
+  if (shown) {                                               // the wheel steps aside
+    shown = false; $("who").style.opacity = 0; document.body.classList.remove("won", "rare", "spin");
+    A($("stage"), [{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(.6)" }], 300, { easing: "ease-in" });
+    A($("title"), [{ opacity: 1 }, { opacity: 0 }], 200); A($("win"), [{ opacity: 0, transform: "translate(-50%, -50%) scale(.2)" }], 1);
+  }
+  const vsrc = qs.get("video") === "0" ? null : "beat"; if (vsrc) newVideo(vsrc); else { dropVideo(pv); pv = null; }   // start fetching Chip's video now
+  $("awName").textContent = sp.winner || "YOU";
+  $("awVal").textContent = !sp.value || /30\s*k/i.test(sp.value) ? "$30,000 VALUE" : String(sp.value).toUpperCase();
+  document.body.classList.add("aw");
+  // the hit: a deep boom, a sweep of noise, two air horns, the screen flashing gold
+  let t = ac().currentTime; tone(55, t, 1.5, "sine", 0.55, 30); noise(t, 1.0, 0.5, 200, 6000); sample("airhorn", 0, 0.8); sample("airhorn", 0.5, 0.6); riser(1.3);
+  A($("flash"), [{ opacity: 0 }, { opacity: 1, offset: 0.12 }, { opacity: 0 }], 520, { easing: "linear", iterations: 4 });
+  A(aw, [{ opacity: 0 }, { opacity: 1 }], 220, { easing: "linear" });
+  A(q(".in"), [{ opacity: 1, transform: "scale(1)" }], 1);
+  A(q(".rays"), [{ opacity: 0 }, { opacity: 1 }], 900, { delay: 150, easing: "linear" });
+  A(q(".disc"), [{ opacity: 0, transform: "scale(.1) rotate(-240deg)" }, { opacity: 1, transform: "scale(1) rotate(0deg)" }], 800, { delay: 200 });
+  A(q(".k"), [{ opacity: 0, transform: "translateY(-5vh)" }, { opacity: 1, transform: "translateY(0)" }], 420, { delay: 650 });
+  A(q(".big"), [{ opacity: 0, transform: "scale(3.4)" }, { opacity: 1, transform: "scale(1)" }], 380, { delay: 1000, easing: "cubic-bezier(.3,0,.2,1)" });
+  await wait(1370); if (my !== runId) return;
+  // the prize lands: everything shakes, the full jackpot fanfare, coins, applause, confetti
+  t = ac().currentTime; tone(70, t, 1.0, "sine", 0.6, 34); noise(t, 0.4, 0.5, 1500, 180);
+  A(q(".in"), [{ transform: "translate(0, 0)" }, { transform: "translate(-1.4vh, 1vh)" }, { transform: "translate(1.2vh, -1vh)" }, { transform: "translate(-.9vh, -.6vh)" }, { transform: "translate(.7vh, .6vh)" }, { transform: "translate(0, 0)" }], 420, { easing: "linear", fill: "none" });
+  A($("flash"), [{ opacity: 0 }, { opacity: 0.85, offset: 0.15 }, { opacity: 0 }], 600, { easing: "linear" });
+  fanfare(true); coins(5); sample("chaching", 0.05, 0.85); sample("applause", 0.4, 0.8); confetti(true);
+  A(q(".val"), [{ opacity: 0, transform: "scale(.3)" }, { opacity: 1, transform: "scale(1)" }], 460, { delay: 550, easing: pop });
+  A(q(".to"), [{ opacity: 0 }, { opacity: 1 }], 300, { delay: 1250, easing: "linear" });
+  A(q(".nm"), [{ opacity: 0, transform: "scale(.3)" }, { opacity: 1, transform: "scale(1)" }], 520, { delay: 1450, easing: pop });
+  await wait(1500); if (my !== runId) return;
+  bell(ac().currentTime, 1047, 0.25); sample("chaching", 0, 0.7);
+  A(q(".big"), [{ transform: "scale(1)" }, { transform: "scale(1.045)" }], 650, { iterations: 60, direction: "alternate", easing: "ease-in-out", fill: "none" });
+  await wait(3000); if (my !== runId) return;
+  confetti(true); coins(3.5); sample("applause", 0, 0.65); bell(ac().currentTime, 1319, 0.2);          // a second wave
+  await wait(4200); if (my !== runId) return;
+  if (vsrc) playTv(vsrc, my, q(".in"));                      // about ten seconds of the award, then Chip
+  else hideTimer = setTimeout(hide, 14000);
+}
+
 /* ---------------- live events from the control page ---------------- */
 let seen = null;
 async function poll() {
@@ -334,7 +411,7 @@ async function poll() {
     setPrizes(j.prizes || []);
     if (seen === null) seen = j.n;                             // first look: never replay an old spin
     else if (j.n !== seen) { seen = j.n; const ev = j.event || {};
-      if (ev.type === "show") show(); else if (ev.type === "hide") hide(); else if (ev.type === "spin" && ev.spin) spin(ev.spin); }
+      if (ev.type === "show") show(); else if (ev.type === "hide") hide(); else if (ev.type === "spin" && ev.spin) spin(ev.spin); else if (ev.type === "award" && ev.spin) award(ev.spin); }
     if (qs.has("debug")) $("dbg").textContent = "event #" + seen + "  prizes: " + prizes.length + "  shown: " + shown + "  busy: " + busy + "  audio: " + (AC ? AC.state : "none");
   } catch (e) { pause = 2000; }
   setTimeout(poll, pause);
@@ -345,10 +422,11 @@ if (qs.has("demo")) {
   document.body.appendChild(tip); addEventListener("pointerdown", () => { try { ac().resume(); } catch (e) {} tip.remove(); }, { once: true });
   setPrizes([{ id: 1, label: "IG FOLLOW + SHOUT OUT", value: "" }, { id: 2, label: "UNRELEASED SOUND PACK", value: "$50 value" }, { id: 3, label: "FREE THRONE", value: "$100 value" },
     { id: 4, label: "VIP CLUB · 6 MONTHS", value: "$120 value" }, { id: 5, label: "1-ON-1 ZOOM CALL", value: "$500 value" }, { id: 6, label: "FREE ILLMIND BEAT", value: "$30K value" }]);
+  if (qs.get("demo") === "award") (async function loop() { await wait(1200); await award({ winner: "Sample Artist", value: "$30K value" }); await wait(36000); hide(); await wait(2500); loop(); })(); else
   (async function loop() { const rare = qs.get("demo") === "rare", p = rare ? prizes[5] : prizes[Math.floor(Math.random() * 4)];
     await show(); await wait(2200); await spin({ prize_id: p.id, label: p.label, name: p.label, value: p.value, winner: "Sample Artist", rare }); await wait(rare ? 32000 : 30000); hide(); await wait(1800); loop(); })();
 } else poll();
-window.wheel = { show, hide, spin, setPrizes, get angle() { return angle; }, get seg() { return seg; }, get slices() { return slices; } };
+window.wheel = { show, hide, spin, award, setPrizes, get angle() { return angle; }, get seg() { return seg; }, get slices() { return slices; } };
 </script>
 </body>
 </html>

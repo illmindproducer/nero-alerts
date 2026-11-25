@@ -138,6 +138,12 @@
     <button id="whTest" class="mini" style="width:100%;margin-top:8px">TEST SPIN (nothing saved, nobody emailed)</button>
     <div id="whOut" style="margin-top:8px;font-size:12px;color:var(--dim);line-height:1.5">Spins for whoever is in the NOW PLAYING box above. The prize is saved in ADMIN.</div>
   </div>
+  <div class="sfx">
+    <h2 style="color:var(--gold)">FREE BEAT AWARD</h2>
+    <button id="baGo" style="width:100%;height:66px;border-radius:12px;border:2px solid var(--gold);background:linear-gradient(160deg,#4a3a05,#1a1302);color:var(--gold);font:400 26px/1 Impact,Haettenschweiler,'Arial Narrow Bold',sans-serif;letter-spacing:.08em;cursor:pointer">🏆 FREE BEAT AWARD</button>
+    <button id="baTest" class="mini" style="width:100%;margin-top:8px">TEST THE CELEBRATION (nothing saved, nobody emailed)</button>
+    <div id="baOut" style="margin-top:8px;font-size:12px;color:var(--dim);line-height:1.5">Gives the free illmind beat to whoever is in the NOW PLAYING box, no wheel needed: a full-screen gold celebration, then Chip's video. The winner is saved in ADMIN and emailed like a wheel win.</div>
+  </div>
   <div class="sfx bud">
     <h2>AI BUDDY <span class="pill" id="budStatus">OFF</span></h2>
     <div id="vcPend" class="vcpend" style="display:none"><b id="vcPendT"></b><span id="vcPendS"></span><div class="two"><button class="mini" id="vcYes">YES, SPIN</button><button class="mini shut" id="vcNo">CANCEL</button></div></div>
@@ -287,13 +293,37 @@ $("whSpin").onclick = async () => {
   whArmed = 0; whBusy = true; whLabel();
   const who = $("artist").value.trim() || "Unknown artist";
   try { const j = await wheelPost({ spin: { winner: who, song: $("song").value.trim(), song_id: S.songId || "" } });
-    Object.assign(wheelNote, { who, prize: j.spin.prize, rare: !!j.spin.rare, at: Date.now(), reacted: false });
+    Object.assign(wheelNote, { who, prize: j.spin.prize, rare: !!j.spin.rare, at: Date.now(), reacted: false, award: false });
     whSay("Spinning… " + who + " is getting: " + j.spin.prize + (j.spin.rare ? "  (JACKPOT)" : ""), "var(--gold)");
     // the winner's claim email goes out by itself about a minute later (the database sends it; this page does not need to stay open)
   }
   catch (e) { whSay("Spin failed: " + e.message, "var(--red)"); }
   setTimeout(() => { whBusy = false; whLabel(); }, 12000);
 };
+/* ---- FREE BEAT AWARD: illmind gives the free illmind beat straight to someone, any time, without the wheel. Two taps, like a spin.
+        It takes over the wheel's browser source on stream (gold celebration, then Chip's beat video), and it is recorded as a win of
+        the beat prize, so the winner is emailed and shows in ADMIN. The same function is used when he asks Ape for it by voice. ---- */
+let baArmed = 0;
+const baSay = (t, c) => { $("baOut").textContent = t; $("baOut").style.color = c || "var(--dim)"; };
+const baLabel = () => { $("baGo").textContent = whBusy ? "ON SCREEN…" : Date.now() - baArmed < 3000 ? "TAP AGAIN TO AWARD THE BEAT" : "🏆 FREE BEAT AWARD"; };
+async function beatAward(who, test) {
+  if (whBusy) throw new Error("something is already on screen");
+  whBusy = true; whLabel(); baLabel();
+  try {
+    const j = await wheelPost({ award: { winner: who, song: $("song").value.trim(), song_id: S.songId || "", test: !!test } });
+    Object.assign(wheelNote, { who, prize: j.spin.prize, rare: true, at: Date.now(), reacted: false, award: true, test: !!test });
+    baSay(test ? "TEST: the celebration is playing. Nothing was saved and nobody gets an email." : "AWARDED: " + who + " gets the " + j.spin.prize + ". Their claim email goes out by itself in about a minute.", test ? "" : "var(--gold)");
+    setTimeout(() => { whBusy = false; whLabel(); baLabel(); }, 34000);          // the celebration and Chip's video have the screen for about half a minute
+  } catch (e) { whBusy = false; whLabel(); baLabel(); baSay("Award failed: " + e.message, "var(--red)"); throw e; }
+}
+$("baGo").onclick = () => {
+  if (whBusy) return;
+  if (Date.now() - baArmed > 3000) { baArmed = Date.now(); baLabel(); setTimeout(baLabel, 3100); return; }
+  baArmed = 0; const who = $("artist").value.trim();
+  if (!who) return baSay("Put the artist in the NOW PLAYING box first.", "var(--red)");
+  beatAward(who, false).catch(() => {});
+};
+$("baTest").onclick = () => { if (!whBusy) beatAward($("artist").value.trim() || "Test Artist", true).catch(() => {}); };
 /* GRAPHICS ON/OFF: whether a pad also shows its animated graphic on stream, or only plays the sound */
 let GFX = true; try { GFX = localStorage.getItem("rating_sfxgfx") !== "0"; } catch (e) {}
 const drawGfx = () => { const b = $("sfxGfx"); b.textContent = "GRAPHICS " + (GFX ? "ON" : "OFF"); b.style.borderColor = b.style.color = GFX ? "var(--green)" : "#777"; };
@@ -329,7 +359,11 @@ function budContext() {
   if (scene.id !== "live") c = SCENES[scene.id][2] + " It started " + Math.round((Date.now() - scene.at) / 1000) + " seconds ago. " + c;
   else if (scene.ended && Date.now() - scene.ended.at < 40000) c = "The " + SCENES[scene.ended.id][0] + " just finished and illmind is live again. " + c;
   const ws = (Date.now() - wheelNote.at) / 1000;
-  if (wheelNote.at && ws < 150) c = "PRIZE WHEEL: " + Math.round(ws) + " seconds ago illmind spun the prize wheel for " + wheelNote.who + ". " +
+  if (wheelNote.at && ws < 150 && wheelNote.award) c = "FREE BEAT AWARD: " + Math.round(ws) + " seconds ago illmind personally gave " + wheelNote.who + " the FREE ILLMIND BEAT AWARD: an original illmind beat worth $30,000, his ultimate prize, handed out directly with no wheel spin" +
+    (wheelNote.test ? " (this one was only a TEST of the celebration; nobody really won, so treat it as a rehearsal)" : "") + ". " +
+    (ws < 11 ? "The gold award celebration is on screen now, with air horns and applause." : ws < 34 ? "Chip Sterling's prize video is playing on a TV on screen now, so the announcer voice and cheering you hear are that video." : "The celebration has finished.") +
+    (wheelNote.reacted ? "" : " React to this: it is the biggest thing that can happen on the show.") + " " + c;
+  else if (wheelNote.at && ws < 150) c = "PRIZE WHEEL: " + Math.round(ws) + " seconds ago illmind spun the prize wheel for " + wheelNote.who + ". " +
     (ws < 10 ? "It is still spinning; do not reveal the result yet. (It will land on: " + wheelNote.prize + ".)" :
       "It landed on: " + wheelNote.prize + (wheelNote.rare ? " (THE JACKPOT, the rarest prize)" : "") + ". " + (ws < 45 ? "Chip Sterling's prize video is playing on a TV on screen now, so the announcer voice and cheering you hear are that video." : "Chip's prize video has finished.") + (wheelNote.reacted ? "" : " React to this win.")) + " " + c;
   return c;
@@ -585,7 +619,8 @@ function vcPend(p) {
   const tick = () => {
     if (VC.pending !== p) return;
     const left = Math.max(0, Math.ceil((p.until - Date.now()) / 1000));
-    $("vcPendT").textContent = p.kind === "ask" ? "SPIN THE WHEEL FOR " + p.who.toUpperCase() + "?" : "SPINNING FOR " + p.who.toUpperCase() + " IN " + left;
+    $("vcYes").textContent = p.beat ? "YES, AWARD IT" : "YES, SPIN";
+    $("vcPendT").textContent = p.beat ? "GIVE " + p.who.toUpperCase() + " THE FREE BEAT?" : p.kind === "ask" ? "SPIN THE WHEEL FOR " + p.who.toUpperCase() + "?" : "SPINNING FOR " + p.who.toUpperCase() + " IN " + left;
     $("vcPendS").textContent = p.kind === "ask" ? "Say yes or no, or tap. Gives up in " + left + " seconds." : "Say cancel, or tap CANCEL.";
     if (Date.now() < p.until) return;
     vcPend(null);
@@ -594,11 +629,17 @@ function vcPend(p) {
   tick(); VC.timer = setInterval(tick, 250);
 }
 async function vcSpinNow(p) {                          // the same real spin the button does
+  if (p.beat) {                                        // …or the same free beat award its button gives
+    if (p.key !== songKey()) return vcLog("The song changed, so the beat award was dropped.");
+    VC.beat = p.key;
+    try { await beatAward(p.who, false); vcLog("Gave " + p.who + " the free illmind beat."); } catch (e) { VC.beat = ""; vcLog("Beat award failed: " + e.message); }
+    return;
+  }
   if (whBusy) return vcLog("The wheel is busy, so no spin.");
   if (p.key !== songKey()) return vcLog("The song changed, so the spin was dropped.");
   whBusy = true; whLabel(); VC.spun = p.key;
   try { const j = await wheelPost({ spin: { winner: p.who, song: $("song").value.trim(), song_id: S.songId || "" } });
-    Object.assign(wheelNote, { who: p.who, prize: j.spin.prize, rare: !!j.spin.rare, at: Date.now(), reacted: false });
+    Object.assign(wheelNote, { who: p.who, prize: j.spin.prize, rare: !!j.spin.rare, at: Date.now(), reacted: false, award: false });
     whSay("Voice spin… " + p.who + " is getting: " + j.spin.prize + (j.spin.rare ? "  (JACKPOT)" : ""), "var(--gold)"); vcLog("Spun the wheel for " + p.who + "."); }
   catch (e) { VC.spun = ""; whSay("Spin failed: " + e.message, "var(--red)"); vcLog("Spin failed: " + e.message); }
   setTimeout(() => { whBusy = false; whLabel(); }, 12000);
@@ -613,7 +654,17 @@ async function vcSecond(blob, quote) {                 // the brain's careful se
   try { return await (await fetch(CHECK_URL, { method: "POST", headers: { "content-type": bud.mime.split(";")[0], "x-rating-key": KEY, "x-quote": btoa(unescape(encodeURIComponent(String(quote || "").slice(0, 160)))) }, body: blob })).json(); }
   catch (e) { return null; }
 }
+async function vcBeat(c, pct) {                        // the free beat by voice: ALWAYS a spoken yes first, whatever the voice match
+  const who = $("artist").value.trim();
+  if (!who) { vcLog("Nobody in NOW PLAYING to give the beat to."); return false; }
+  if (whBusy || VC.pending) { vcLog("Something is already going on, so the beat award was ignored."); return false; }
+  if (VC.beat && VC.beat === songKey()) { vcLog("Already gave the beat for this song by voice. Use the button for another."); return false; }
+  vcPend({ kind: "ask", beat: true, who, key: songKey(), until: Date.now() + 30000, text: `you asked illmind whether to give ${who} the FREE ILLMIND BEAT AWARD, his ultimate prize. A yes from him is action confirm; a no is action cancel.` });
+  vcLog("Asked for a yes before giving " + who + " the free beat" + pct + ".");
+  await vcSayLine(`Give ${who} the free illmind beat, the thirty thousand dollar one? Say yes or no.`); return false;
+}
 async function vcSpin(j, c, blob, vp, pct) {
+  if (/beat/i.test(String((c.args || {}).prize || ""))) return vcBeat(c, pct);
   if (c.decision === "spun") { vcLog("Already spun for this song by voice. Use the button for another."); return true; }
   if (c.decision === "noartist") { vcLog("Nobody in NOW PLAYING to spin for."); return true; }
   const who = $("artist").value.trim();

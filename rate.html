@@ -76,6 +76,11 @@
   .bud input[type=text], .bud select { height: 40px; width: 100%; background: #101a14; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); font: inherit; font-size: 14px; padding: 0 10px; }
   .bud .two .mini { height: 40px; font-size: 13px; }
   .bud .shut { border-color: var(--red); color: var(--red); }
+  .vcpend { margin: 0 0 10px; padding: 11px 12px; border-radius: 12px; border: 2px solid var(--gold); background: #1a1503; }
+  .vcpend b { display: block; font: 400 22px/1.1 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; letter-spacing: .05em; color: var(--gold); }
+  .vcpend span { display: block; margin-top: 4px; font-size: 12px; color: var(--ink); }
+  .vcteach { margin-top: 10px; padding: 12px; border-radius: 10px; border: 1px solid var(--green); background: #071309; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+  .bud .mini.sel { background: var(--green); color: #06110a; border-color: var(--green); }
   .meter { height: 8px; margin-top: 10px; border-radius: 4px; background: #101a14; overflow: hidden; }
   .meter i { display: block; height: 100%; width: 100%; background: var(--green); transform-origin: left center; transform: scaleX(0); }
   #budLog { margin-top: 10px; font-size: 12px; line-height: 1.5; color: var(--dim); white-space: pre-wrap; min-height: 54px; }
@@ -135,6 +140,7 @@
   </div>
   <div class="sfx bud">
     <h2>AI BUDDY <span class="pill" id="budStatus">OFF</span></h2>
+    <div id="vcPend" class="vcpend" style="display:none"><b id="vcPendT"></b><span id="vcPendS"></span><div class="two"><button class="mini" id="vcYes">YES, SPIN</button><button class="mini shut" id="vcNo">CANCEL</button></div></div>
     <button class="big" id="budEars">TURN EARS ON</button>
     <div class="vol">CHIME-IN <input type="range" id="budDial" min="0" max="10" value="5"> <span id="budDialN">5</span></div>
     <div class="vol">ITS VOLUME <input type="range" id="budVol" min="0" max="100" value="80"> <span id="budVolN">80</span></div>
@@ -143,6 +149,11 @@
       <select id="budVoice"><option>Fenrir</option><option>Charon</option><option>Orus</option><option>Puck</option><option>Algenib</option><option>Enceladus</option><option>Iapetus</option><option>Umbriel</option><option>Rasalgethi</option><option>Kore</option><option>Zephyr</option></select></div>
     <div class="vol" style="margin-top:10px">ON SCREEN NOW <span id="budSceneN" style="margin-left:auto">LIVE</span></div>
     <div class="two" style="grid-template-columns:1fr 1fr 1fr"><button class="mini sel" data-scene="live">LIVE</button><button class="mini" data-scene="welcome">WELCOME VIDEO</button><button class="mini" data-scene="gems">GEMS VIDEO</button></div>
+    <div class="vol" style="margin-top:14px">VOICE COMMANDS <span id="vcInfo" style="margin-left:auto">OFF</span></div>
+    <button class="big" id="vcBtn" style="margin-top:6px">TURN VOICE COMMANDS ON</button>
+    <div class="two"><button class="mini" id="vcTeach">TEACH APE YOUR VOICE</button><button class="mini" id="asBtn">AUTO SOUND FX OFF</button></div>
+    <div class="vol">AUTO FX <input type="range" id="asDial" min="1" max="10" value="4"> <span id="asDialN">4</span></div>
+    <div id="vcTeachBox" class="vcteach" style="display:none"></div>
     <div class="vol" style="margin-top:14px">LIVE CHAT <span id="chatInfo" style="margin-left:auto">OFF</span></div>
     <button class="big" id="chatBtn" style="margin-top:6px">TURN CHAT REPLIES ON</button>
     <div class="vol">ANSWERS <input type="range" id="chatDial" min="1" max="10" value="9"> <span id="chatDialN">9</span></div>
@@ -255,7 +266,7 @@ async function fireSfx(id, el) {
 }
 for (const [id, label, emoji] of PADS) {
   const b = document.createElement("button"); b.className = "pad"; b.innerHTML = `<span class="e">${emoji}</span><span class="t">${label}</span>`;
-  b.addEventListener("click", () => fireSfx(id, b)); $("pads").appendChild(b);
+  b.addEventListener("click", () => { VC.padAt = Date.now(); fireSfx(id, b); }); $("pads").appendChild(b);
 }
 $("sfxStop").onclick = () => fireSfx("stop");
 /* ---- prize wheel: SHOW brings it on screen, SPIN picks a prize for the current artist (tap twice, so it can't fire by accident), HIDE removes it ---- */
@@ -350,6 +361,7 @@ async function budSend(blob, ms) {
   try {
     const meta = { dial: +$("budDial").value, name: $("budName").value.trim() || "Ape", character: "ape", voice: $("budVoice").value, sec: Math.round(ms / 1000),
                    sinceSpoke: bud.lastSpoke ? (Date.now() - bud.lastSpoke) / 1000 : 999, history: bud.history.slice(-12), context: budContext() };
+    Object.assign(meta, vcMeta());                     // voice commands / auto sound fx, when they are switched on
     const wsec = (Date.now() - wheelNote.at) / 1000;
     if (wheelNote.at && !wheelNote.reacted && wsec > 10 && wsec < 90) meta.force = true;      // a wheel win is worth a line even if he spoke a moment ago
     const r = await fetch(BRAIN, { method: "POST", headers: { "content-type": bud.mime.split(";")[0], "x-rating-key": KEY, "x-meta": b64(meta) }, body: blob });
@@ -359,7 +371,10 @@ async function budSend(blob, ms) {
     if (j.music === true) bud.musLocal = true;                                     // the brain heard a song: start the head-bop straight away
     else if (j.music === false && j.heard && j.heard !== "silence") bud.musVeto = Date.now() + 6000;   // it was only talking: no bopping for a moment
     bud.history = bud.history.slice(-20);
-    if (j.url && bud.on && Date.now() > bud.speakingUntil) await budSpeak(j);
+    let speak = true;                                  // a voice command decides for itself whether his line for it is spoken
+    if (j.command) { try { speak = await vcHandle(j, blob); } catch (e) { speak = false; budLog("VOICE", "error: " + (e.message || e)); } }
+    if (speak && j.url && bud.on && Date.now() > bud.speakingUntil) await budSpeak(j);
+    if (j.sfx) vcAutoSfx(j.sfx);
   } catch (e) { budLog("ERROR", String(e)); }
   finally { bud.inflight--; }
 }
@@ -369,7 +384,7 @@ function budChunk() {                                  // start recording the ne
   const rec = bud.rec = new MediaRecorder(bud.boosted, { mimeType: bud.mime, audioBitsPerSecond: 32000 });
   rec.ondataavailable = e => { if (e.data && e.data.size) bud.parts.push(e.data); };
   rec.onstop = () => {
-    const ms = Date.now() - bud.t0, keep = bud.had && !bud.tainted && ms > 1200;
+    const ms = Date.now() - bud.t0, keep = bud.had && !bud.tainted && !bud.enrolling && ms > 1200;
     const blob = keep ? new Blob(bud.parts, { type: bud.mime }) : null;
     budChunk(); if (blob) budSend(blob, ms);
   };
@@ -442,11 +457,258 @@ try { if (localStorage.getItem("bud_is_chip")) { localStorage.removeItem("bud_is
 try { if (!localStorage.getItem("bud_is_ape")) { localStorage.setItem("bud_is_ape", "1"); localStorage.setItem("bud_name", "Ape"); } } catch (e) {}
 /* illmind's standard settings (2026-11-24): voice Fenrir, chime-in 5, volume 80, mic boost 11. Applied once per device, over whatever was saved before; changes made after that stick. */
 try { if (!localStorage.getItem("bud_defaults_2")) { localStorage.setItem("bud_defaults_2", "1"); localStorage.setItem("bud_voice", "Fenrir"); localStorage.setItem("bud_dial", "5"); localStorage.setItem("bud_vol", "80"); localStorage.setItem("bud_gain", "11"); } } catch (e) {}
-for (const [id, key, show] of [["budDial", "bud_dial", "budDialN"], ["budName", "bud_name"], ["budVoice", "bud_voice"], ["budVol", "bud_vol", "budVolN"], ["budGain", "bud_gain", "budGainN"], ["chatDial", "chat_dial", "chatDialN"]]) {
+for (const [id, key, show] of [["budDial", "bud_dial", "budDialN"], ["budName", "bud_name"], ["budVoice", "bud_voice"], ["budVol", "bud_vol", "budVolN"], ["budGain", "bud_gain", "budGainN"], ["chatDial", "chat_dial", "chatDialN"], ["asDial", "as_dial", "asDialN"]]) {
   try { const v = localStorage.getItem(key); if (v !== null) $(id).value = v; } catch (e) {}
   if (show) $(show).textContent = $(id).value;
   $(id).addEventListener("input", e => { if (show) $(show).textContent = e.target.value; try { localStorage.setItem(key, e.target.value); } catch (x) {} });
 }
+
+/* ---------------- voice commands: illmind asks Ape out loud, Ape works this page ----------------
+   The brain (buddy-brain) hears the request in the room clip and REPORTS it; it never presses anything. This page decides.
+   Built to avoid accidents on a live stream, in layers:
+     1. the brain only reports a direct order that says Ape's name, in live speech (not a song, a video or Ape's own echo)
+     2. a VOICE PRINT, worked out on this device, compares the clip with illmind's own voice (TEACH APE YOUR VOICE).
+        A clear mismatch is refused, whatever was said.
+     3. a REAL wheel spin (a real prize, a real email) never just happens: with a strong voice match and a second opinion it is
+        announced and counts down, and "cancel" from anyone stops it; anything less and Ape asks for a spoken yes first.
+        One voice spin per song. Everything else a command can do is harmless to undo.
+     4. nothing works while a video scene is on, while this is switched off, or while ears are off. Every button still works.
+   AUTO SOUND FX: the brain may suggest a pad for a strong reaction of his; this page fires it if it is strong enough and
+   there has been a gap since the last pad. */
+const CHECK_URL = "https://xosofmhvgnxschaitgnb.supabase.co/functions/v1/buddy-voicecheck";
+const VC = { on: false, auto: false, pending: null, spun: "", last: 0, lastAct: "", lastActAt: 0, sfxAt: 0, sfxLast: "", padAt: 0, timer: 0 };
+try { VC.on = localStorage.getItem("vc_on") === "1"; VC.auto = localStorage.getItem("vc_auto") === "1"; } catch (e) {}
+const vcLog = t => budLog("VOICE", t);
+const songKey = () => S.songId || (S.song + "|" + S.artist);
+function vcMeta() {                                    // what the brain is told with every clip
+  const live = scene.id === "live", o = {};
+  if (VC.on && live) o.cmd = { on: true, pending: VC.pending ? VC.pending.text : null, spun: !!VC.spun && VC.spun === songKey(), artist: $("artist").value.trim().slice(0, 60) };
+  if (VC.auto && live) o.autoSfx = true;
+  return o;
+}
+
+/* ---- the voice print: a small speech model that runs on this device, in the background, and turns a clip into a
+        fingerprint of the voice in it. Two fingerprints of the same person score close to 1, strangers lower.
+        It is a filter, not a lock: a similar-sounding voice can pass it, which is why a real spin has its own safeguards. ---- */
+const VP = { w: null, state: "off", ref: null, hi: 0.86, lo: 0.74, at: "", seq: 0, wait: new Map() };
+try { const s = JSON.parse(localStorage.getItem("vc_voice") || "null"); if (s && Array.isArray(s.ref) && s.ref.length) Object.assign(VP, { ref: s.ref, hi: +s.hi || 0.86, lo: +s.lo || 0.74, at: s.at || "" }); } catch (e) {}
+const VP_SRC = 'import { AutoProcessor, AutoModel, env } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2";\n' +
+  'env.allowLocalModels = false; let P, M;\n' +
+  'const ready = (async () => { P = await AutoProcessor.from_pretrained("Xenova/wavlm-base-plus-sv"); M = await AutoModel.from_pretrained("Xenova/wavlm-base-plus-sv"); })();\n' +
+  'ready.then(() => postMessage({ ready: true }), e => postMessage({ fail: String(e) }));\n' +
+  'onmessage = async e => { try { await ready; const out = await M(await P(e.data.pcm)); const v = Array.from(out.embeddings.data); const n = Math.hypot(...v) || 1; postMessage({ id: e.data.id, emb: v.map(x => x / n) }); } catch (x) { postMessage({ id: e.data.id, err: String(x) }); } };\n';
+function vpStart() {
+  if (VP.w || VP.state === "failed") return;
+  VP.state = "loading"; vcDraw();
+  const fail = why => { VP.state = "failed"; try { VP.w && VP.w.terminate(); } catch (e) {} VP.w = null; vcDraw(); vcLog("Voice print could not load (" + why + "). Spins will ask for a yes."); };
+  try {
+    VP.w = new Worker(URL.createObjectURL(new Blob([VP_SRC], { type: "text/javascript" })), { type: "module" });
+    VP.w.onmessage = e => { const d = e.data || {};
+      if (d.ready) { VP.state = "ready"; vcDraw(); }
+      else if (d.fail) fail(d.fail.slice(0, 80));
+      else { const f = VP.wait.get(d.id); if (f) { VP.wait.delete(d.id); f(d); } } };
+    VP.w.onerror = e => fail((e && e.message) || "worker error");
+  } catch (e) { fail(String(e.message || e)); }
+}
+async function vpPcm(blob) {                           // any recording -> mono samples at 16 kHz, which is what the model wants
+  const buf = await new OfflineAudioContext(1, 16000, 16000).decodeAudioData(await blob.arrayBuffer());
+  return new Float32Array(buf.getChannelData(0));
+}
+function vpEmbed(pcm) {
+  return new Promise((res, rej) => {
+    if (!VP.w || VP.state !== "ready") return rej(new Error("voice print not ready"));
+    const id = ++VP.seq, t = setTimeout(() => { VP.wait.delete(id); rej(new Error("voice print timed out")); }, 20000);
+    VP.wait.set(id, d => { clearTimeout(t); d.emb ? res(d.emb) : rej(new Error(d.err || "failed")); });
+    VP.w.postMessage({ id, pcm }, [pcm.buffer]);
+  });
+}
+const vpCos = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
+const vpUnit = v => { const n = Math.hypot(...v) || 1; return v.map(x => x / n); };
+async function vpScore(blob) {                         // strong = clearly him · weak = could be him · mismatch = someone else · none = cannot tell
+  if (!VP.ref || VP.state !== "ready") return { tier: "none", score: null };
+  try { const s = vpCos(await vpEmbed(await vpPcm(blob)), VP.ref); return { tier: s >= VP.hi ? "strong" : s >= VP.lo ? "weak" : "mismatch", score: s }; }
+  catch (e) { return { tier: "none", score: null }; }
+}
+
+/* ---- TEACH APE YOUR VOICE: five short lines, read out loud into the stream microphone ---- */
+const TEACH = ["Ape, pull up the wheel and spin it for this one.", "Ape, show the ratings, and give the drums an eighty five.", "Yo Ape, turn your volume down a bit and hit the air horn.",
+  "This is illmind, and this is how I sound when I'm just talking on the stream.", "Ape, yes, do it. Ape, cancel that. Take the ratings down."];
+const vcWait = ms => new Promise(r => setTimeout(r, ms));
+function vcRecord(ms) {
+  return new Promise((res, rej) => { const parts = [], r = new MediaRecorder(bud.boosted, { mimeType: bud.mime, audioBitsPerSecond: 64000 });
+    r.ondataavailable = e => { if (e.data && e.data.size) parts.push(e.data); }; r.onstop = () => res(new Blob(parts, { type: bud.mime })); r.onerror = () => rej(new Error("recording failed"));
+    r.start(); setTimeout(() => { if (r.state === "recording") r.stop(); }, ms); });
+}
+async function vcTeach() {
+  const box = $("vcTeachBox"), say = t => { box.style.display = "block"; box.textContent = t; };
+  if (bud.enrolling) return;
+  if (!bud.on) return say("Turn EARS ON first, with no music playing. Then tap this again.");
+  bud.enrolling = true; $("vcTeach").disabled = true;
+  try {
+    VP.state === "failed" && (VP.state = "off"); vpStart();
+    for (let i = 0; VP.state === "loading" && i < 600; i++) { say("Getting the voice print ready. The first time it downloads about 95 MB, so give it a minute…"); await vcWait(500); }
+    if (VP.state !== "ready") throw new Error("the voice print could not load on this device");
+    const embs = [], blobs = [];
+    for (let i = 0; i < TEACH.length; i++) {
+      for (let tries = 0; ; tries++) {
+        say(`LINE ${i + 1} OF ${TEACH.length} · get ready…\n\n"${TEACH[i]}"`); await vcWait(1500);
+        say(`LINE ${i + 1} OF ${TEACH.length} · SAY IT NOW, in your normal stream voice:\n\n"${TEACH[i]}"`);
+        bud.speakingUntil = Date.now() + 7000;                                   // the ears ignore the room while this records
+        const blob = await vcRecord(5500), pcm = await vpPcm(blob);
+        let s = 0; for (let k = 0; k < pcm.length; k++) s += pcm[k] * pcm[k];
+        if (Math.sqrt(s / Math.max(1, pcm.length)) < 0.012) { if (tries >= 2) throw new Error("I could not hear you. Check the microphone and MIC BOOST, then try again"); say("Did not hear that one. Again…"); await vcWait(1200); continue; }
+        embs.push(await vpEmbed(pcm)); blobs.push(blob); break;
+      }
+    }
+    const mean = vpUnit(embs[0].map((_, k) => embs.reduce((a, e) => a + e[k], 0) / embs.length));
+    let low = 1; for (let a = 0; a < embs.length; a++) for (let b = a + 1; b < embs.length; b++) low = Math.min(low, vpCos(embs[a], embs[b]));
+    // This model scores everyone fairly high: the same person is usually 90% or more, a different man around 80 to 85%,
+    // a very different voice under 75%. So the bars sit high, and are set from how alike his own five lines are.
+    const hi = Math.max(0.86, Math.min(0.94, low - 0.02)), lo = Math.max(0.6, Math.min(0.8, low - 0.12));
+    Object.assign(VP, { ref: mean, hi, lo, at: new Date().toISOString() });
+    try { localStorage.setItem("vc_voice", JSON.stringify({ ref: mean.map(x => +x.toFixed(5)), hi, lo, at: VP.at })); } catch (e) {}
+    say("Saving…");
+    // one line also goes to the brain, so it has heard his voice too (its own check is rougher: it catches a different kind of voice, or a recording)
+    const r = await fetch(BRAIN, { method: "POST", headers: { "content-type": bud.mime.split(";")[0], "x-rating-key": KEY, "x-meta": b64({ enroll: true }) }, body: blobs[3] });
+    const j = await r.json().catch(() => ({}));
+    say(`Done. Ape knows your voice on this device${j.ok ? "" : " (the brain's copy did not save: " + (j.error || "error") + ")"}.\nYour own lines matched each other ${Math.round(low * 100)}%. A hands-free spin needs ${Math.round(hi * 100)}% or better; under ${Math.round(lo * 100)}% is refused as not you.\nRe-teach any time, for example if you change microphone.`);
+    vcLog("Learned your voice.");
+  } catch (e) { say("Could not finish: " + (e.message || e) + "."); }
+  bud.enrolling = false; $("vcTeach").disabled = false; vcDraw();
+}
+
+/* ---- a spin that is waiting: either counting down (say cancel) or waiting for a yes ---- */
+function vcPend(p) {
+  VC.pending = p; clearInterval(VC.timer); const box = $("vcPend");
+  if (!p) { box.style.display = "none"; return; }
+  box.style.display = "block"; $("vcYes").style.display = p.kind === "ask" ? "" : "none";
+  const tick = () => {
+    if (VC.pending !== p) return;
+    const left = Math.max(0, Math.ceil((p.until - Date.now()) / 1000));
+    $("vcPendT").textContent = p.kind === "ask" ? "SPIN THE WHEEL FOR " + p.who.toUpperCase() + "?" : "SPINNING FOR " + p.who.toUpperCase() + " IN " + left;
+    $("vcPendS").textContent = p.kind === "ask" ? "Say yes or no, or tap. Gives up in " + left + " seconds." : "Say cancel, or tap CANCEL.";
+    if (Date.now() < p.until) return;
+    vcPend(null);
+    if (p.kind === "count") vcSpinNow(p); else vcLog("No answer, so no spin.");
+  };
+  tick(); VC.timer = setInterval(tick, 250);
+}
+async function vcSpinNow(p) {                          // the same real spin the button does
+  if (whBusy) return vcLog("The wheel is busy, so no spin.");
+  if (p.key !== songKey()) return vcLog("The song changed, so the spin was dropped.");
+  whBusy = true; whLabel(); VC.spun = p.key;
+  try { const j = await wheelPost({ spin: { winner: p.who, song: $("song").value.trim(), song_id: S.songId || "" } });
+    Object.assign(wheelNote, { who: p.who, prize: j.spin.prize, rare: !!j.spin.rare, at: Date.now(), reacted: false });
+    whSay("Voice spin… " + p.who + " is getting: " + j.spin.prize + (j.spin.rare ? "  (JACKPOT)" : ""), "var(--gold)"); vcLog("Spun the wheel for " + p.who + "."); }
+  catch (e) { VC.spun = ""; whSay("Spin failed: " + e.message, "var(--red)"); vcLog("Spin failed: " + e.message); }
+  setTimeout(() => { whBusy = false; whLabel(); }, 12000);
+}
+$("vcNo").onclick = () => { if (VC.pending) { vcPend(null); vcLog("Cancelled."); } };
+$("vcYes").onclick = () => { const p = VC.pending; if (p && p.kind === "ask") { vcPend(null); vcSpinNow(p); } };
+async function vcSayLine(text) {                       // a fixed line, spoken by Ape
+  try { const j = await (await fetch(BRAIN, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ say: text, voice: $("budVoice").value, character: "ape" }) })).json();
+    if (j.ok && bud.on) await budSpeak(j); } catch (e) {}
+}
+async function vcSecond(blob, quote) {                 // the brain's careful second opinion on whose voice it was
+  try { return await (await fetch(CHECK_URL, { method: "POST", headers: { "content-type": bud.mime.split(";")[0], "x-rating-key": KEY, "x-quote": btoa(unescape(encodeURIComponent(String(quote || "").slice(0, 160)))) }, body: blob })).json(); }
+  catch (e) { return null; }
+}
+async function vcSpin(j, c, blob, vp, pct) {
+  if (c.decision === "spun") { vcLog("Already spun for this song by voice. Use the button for another."); return true; }
+  if (c.decision === "noartist") { vcLog("Nobody in NOW PLAYING to spin for."); return true; }
+  const who = $("artist").value.trim();
+  if (!who || whBusy || VC.pending) { vcLog("The wheel is busy, so that spin was ignored."); return false; }
+  const p = { who, key: songKey() };
+  let direct = c.decision === "do" && vp.tier === "strong";
+  if (direct) {                                        // hands-free only with a second opinion that agrees
+    const chk = await vcSecond(blob, c.quote);
+    if (chk && chk.ok && chk.learned && (chk.source === "playback" || (chk.same === false && chk.confidence >= 90))) {
+      vcLog("Refused a spin: " + (chk.source === "playback" ? "it sounded like a recording or a speaker" : "a second check says that was not your voice") + pct + "."); return false; }
+    if (!chk || !chk.ok || !chk.same) direct = false;
+  }
+  if (VC.pending || whBusy || p.key !== songKey()) return false;
+  if (direct) {                                        // his line is fixed by the brain: "Spinning the wheel for X. Say cancel to stop me."
+    vcPend({ kind: "count", who, key: p.key, until: Date.now() + ((j.url ? j.dur : 0) + 1.2) * 1000 + 6000,
+      text: `a prize wheel spin for ${who} is counting down and happens in a few seconds. If ANYONE says cancel, stop, wait or no, report action cancel.` });
+    vcLog("Spin for " + who + " is counting down" + pct + ". Say cancel to stop it."); return true;
+  }
+  vcPend({ kind: "ask", who, key: p.key, until: Date.now() + 30000, text: `you asked illmind whether to spin the prize wheel for ${who}. A yes from him is action confirm; a no is action cancel.` });
+  vcLog("Asked for a yes before spinning for " + who + pct + ".");
+  if (c.decision === "confirm") return true;           // the brain's line already is the question
+  await vcSayLine(`Spin the wheel for ${who}? Say yes or no.`); return false;
+}
+/* everything else: each one does exactly what its button does. Returns what was done (for the log), or null. */
+function vcDo(c) {
+  const a = c.args && typeof c.args === "object" ? c.args : {}, want = cur => typeof a.on === "boolean" ? a.on : !cur;
+  const has = v => v !== null && v !== undefined && v !== "" && Number.isFinite(+v);
+  const slide = (id, min, max) => { const el = $(id); let v = +el.value; if (has(a.value)) v = +a.value; else if (has(a.delta)) v += +a.delta; else return null;
+    v = Math.round(Math.max(min, Math.min(max, v))); el.value = v; el.dispatchEvent(new Event("input", { bubbles: true })); return v; };
+  switch (c.action) {
+    case "wheel_show": wheelPost({ show: true }).then(() => whSay("Wheel is on screen (voice).")).catch(e => whSay("Could not show: " + e.message, "var(--red)")); return "Wheel on screen.";
+    case "wheel_hide": wheelPost({ hide: true }).then(() => whSay("Wheel hidden (voice).")).catch(e => whSay("Could not hide: " + e.message, "var(--red)")); return "Wheel hidden.";
+    case "wheel_test_spin": if (whBusy) return null; $("whTest").click(); return "Test spin (nothing saved).";
+    case "sfx": { const id = String(a.id || ""); if (!PADS.some(p => p[0] === id)) return null; VC.padAt = Date.now(); fireSfx(id); return "Played " + id + "."; }
+    case "sfx_stop": fireSfx("stop"); return "Stopped all sounds.";
+    case "rating_show": if (!S.visible) $("show").click(); return "Ratings graphic on stream.";
+    case "rating_hide": if (S.visible) $("show").click(); return "Ratings graphic off stream.";
+    case "rate": { const done = [];
+      for (const [k] of CATS) { const v = a[k];
+        if (v === "na" && k === "vocals") { set(k, "na"); done.push("vocals n/a"); }
+        else if (has(v)) { const n = Math.max(0, Math.min(100, Math.round(+v))); set(k, n); done.push(k + " " + n); } }
+      if (has(a.overall)) { S.overallManual = true; S.overall = Math.max(0, Math.min(100, Math.round(+a.overall))); paint(); push(); done.push("overall " + S.overall); }
+      return done.length ? "Scores set: " + done.join(", ") + "." : null; }
+    case "new_rating": nextSong(); return "Fresh rating started.";
+    case "placement": { const w = want(S.placement); if (S.placement !== w) $("placement").click(); return "Placement ready " + (w ? "on" : "off") + "."; }
+    case "chat_replies": { const w = want(chat.on); if (chat.on !== w) $("chatBtn").click(); return "Chat replies " + (w ? "on" : "off") + "."; }
+    case "volume": { const v = slide("budVol", 0, 100); return v === null ? null : "My volume is " + v + "."; }
+    case "sfx_volume": { const v = slide("sfxVol", 0, 100); return v === null ? null : "Sound pad volume is " + v + "."; }
+    case "chattiness": { const v = slide("budDial", 0, 10); return v === null ? null : "Chime-in is " + v + "."; }
+    case "graphics": { const w = want(GFX); if (GFX !== w) $("sfxGfx").click(); return "Pad graphics " + (w ? "on" : "off") + "."; }
+    case "auto_sfx": { const w = want(VC.auto); vcAuto(w); return "Auto sound fx " + (w ? "on" : "off") + "."; }
+    case "shut_up": $("budShut").click(); return "Stopped talking.";
+    case "ears_off": setTimeout(budStop, 60); return "Ears off. Tap TURN EARS ON to bring me back.";
+  }
+  return null;
+}
+/* A reported command arrives with the brain's answer. Returns true if Ape's own line for it should be spoken. */
+async function vcHandle(j, blob) {
+  const c = j.command, q = c.quote ? ' "' + c.quote + '"' : "";
+  if (!VC.on || scene.id !== "live") return false;
+  if (c.action === "cancel") { if (c.decision === "do" && VC.pending) { vcPend(null); vcLog("Cancelled by voice."); return true; } return false; }
+  if (c.decision === "refuse") { vcLog("Ignored" + q + ": " + (!c.named ? "my name was not said" : c.speaker === "other" ? "it did not sound like you" : "not sure enough it was a real order (" + c.confidence + "%)") + "."); return false; }
+  const vp = await vpScore(blob), pct = vp.score === null ? "" : " · voice match " + Math.round(vp.score * 100) + "%";
+  if (vp.tier === "mismatch") { vcLog("Refused" + q + ": that was not your voice" + pct + "."); return false; }
+  if (c.action === "confirm") { const p = VC.pending; if (!p || p.kind !== "ask") return false; vcPend(null); vcLog("You said yes" + pct + "."); vcSpinNow(p); return true; }
+  const now = Date.now(), repeatable = /^(sfx|rate|volume|sfx_volume|chattiness)$/.test(c.action);
+  if (now - VC.last < 2000 || (!repeatable && c.action === VC.lastAct && now - VC.lastActAt < 8000)) return false;   // one thing at a time, and never the same thing twice in a row
+  VC.last = now; VC.lastAct = c.action; VC.lastActAt = now;
+  if (c.action === "wheel_spin") return vcSpin(j, c, blob, vp, pct);
+  const did = vcDo(c);
+  if (did === null) { vcLog("Could not do" + q + "."); return false; }
+  vcLog(did + pct); return c.action !== "shut_up" && c.action !== "ears_off";
+}
+function vcAutoSfx(s) {                                // the brain suggested a pad for a strong reaction of his
+  if (!VC.auto || scene.id !== "live" || !s || !PADS.some(p => p[0] === s.id)) return;
+  const now = Date.now(), need = 100 - (+$("asDial").value) * 6;                 // AUTO FX 1 = only the unmistakable (94), 4 = 76, 10 = most reactions (40)
+  if (s.strength < need || now - VC.sfxAt < 25000 || now - VC.padAt < 8000 || (s.id === VC.sfxLast && now - VC.sfxAt < 120000)) return;
+  VC.sfxAt = now; VC.sfxLast = s.id; fireSfx(s.id);
+  bud.history.push("[you just played the " + s.id + " sound pad for him]"); budLog("AUTO FX", s.id + (s.why ? " · " + s.why : "") + " (" + s.strength + ")");
+}
+function vcAuto(on) { VC.auto = !!on; try { localStorage.setItem("vc_auto", VC.auto ? "1" : "0"); } catch (e) {} vcDraw(); }
+function vcDraw() {
+  const b = $("vcBtn"); b.classList.toggle("on", VC.on); b.textContent = VC.on ? "VOICE COMMANDS ON · TAP TO TURN OFF" : "TURN VOICE COMMANDS ON";
+  $("vcInfo").textContent = !VC.on ? "OFF" : !VP.ref ? "NO VOICE LEARNED · SPINS ASK FOR A YES" : VP.state === "ready" ? "YOUR VOICE IS LEARNED" : VP.state === "loading" ? "LOADING VOICE PRINT…" : "VOICE PRINT UNAVAILABLE · SPINS ASK FOR A YES";
+  $("vcTeach").textContent = VP.ref ? "RE-TEACH YOUR VOICE" : "TEACH APE YOUR VOICE";
+  const a = $("asBtn"); a.classList.toggle("sel", VC.auto); a.textContent = "AUTO SOUND FX " + (VC.auto ? "ON" : "OFF");
+}
+$("vcBtn").onclick = () => {
+  VC.on = !VC.on; try { localStorage.setItem("vc_on", VC.on ? "1" : "0"); } catch (e) {}
+  if (VC.on) { if (VP.ref) vpStart(); vcLog(bud.on ? 'On. Say "Ape, …" and ask.' : "On, but EARS are off. Turn ears on so I can hear you."); } else { vcPend(null); vcLog("Off."); }
+  vcDraw();
+};
+$("asBtn").onclick = () => vcAuto(!VC.auto);
+$("vcTeach").onclick = vcTeach;
+vcDraw(); if (VC.on && VP.ref) vpStart();
 
 /* ---------------- live chat: the buddy reads it and answers out loud ----------------
    Nero already gathers the chat from every platform linked to the session (Twitch, Kick, TikTok, YouTube). A small relay

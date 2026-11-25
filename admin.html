@@ -232,6 +232,10 @@ async function wheelApi(method, body) {
 }
 /* where a winner stands, in plain words */
 function spinStage(s) {
+  if (s.prize_kind === "submission") {            // a free Throne is a pass: it flags itself on the control page and closes when their song plays
+    if (s.status === "fulfilled") return ["done", s.pass?.used ? "DONE · THRONE USED" : "DONE · PRIZE SENT"];
+    if (s.status === "claimed" || s.status === "emailed") return ["wait", "PASS OPEN · FLAGS ITSELF WHEN THEY SUBMIT"];
+  }
   if (s.status === "fulfilled") return ["done", "DONE · PRIZE SENT"];
   if (s.status === "claimed") return ["todo", "DETAILS IN · SEND THE PRIZE"];
   if (s.status === "emailed") return ["wait", "EMAILED · WAITING ON WINNER"];
@@ -241,7 +245,9 @@ const igUrl = c => { const h = String(c?.instagram || "").trim().replace(/^@/, "
 const claimLink = s => SITE + "claim.html?t=" + encodeURIComponent(s.claim_token);
 function winnerMessage(s) {
   const ask = { physical: "It asks for your mailing address so I can ship it out.", digital: "It asks where to send it.", call: "It asks for your time zone and when you're free.",
-    membership: "It asks which email to set your membership up under.", social: "It asks for your Instagram handle.", submission: "It asks for your Nero account email so the free submission gets applied to you." }[s.prize_kind] || "";
+    membership: "It asks which email to set your membership up under.", social: "It asks for your Instagram handle.", submission: "" }[s.prize_kind] || "";
+  if (s.prize_kind === "submission") return { subject: "You won on illmind's stream: " + s.prize_name,
+    body: `Yo ${s.winner || "there"},\n\nCongrats! You won ${s.prize_name} on my stream${s.song ? ` for your track "${s.song}"` : ""}.\n\nHere's how it works: the next time you submit a track on my stream${s.winner ? ` as "${s.winner}"` : ""}, it gets bumped to the front of the line. No code, nothing to pay.\n\nGoing to submit under a different name? Tell me which one here, so the bump finds you:\n${claimLink(s)}\n\nMuch love,\n!llmind` };
   return { subject: "You won on illmind's stream: " + s.prize_name,
     body: `Yo ${s.winner || "there"},\n\nCongrats! You won ${s.prize_name} on my stream${s.song ? ` for your track "${s.song}"` : ""}.\n\nTo claim it, fill out this quick form (takes a minute):\n${claimLink(s)}\n\n${ask}\n\nMuch love,\n!llmind` };
 }
@@ -426,6 +432,11 @@ $("wSpins").onclick = async e => {
     if (act === "details") return copy(`${s.winner} · ${s.prize_name}\n` + Object.entries(s.claim || {}).map(([k, v]) => k.replace(/_/g, " ") + ": " + v).join("\n"), e.target);
     if (act === "email") await save({ email });
     else if (act === "note") await save({ note: card.querySelector("input[type=text]").value });
+    else if (act.startsWith("st:") && act !== "st:fulfilled" && s.status === "fulfilled" && s.pass?.used) {   // a used free Throne: reopen through the pass, so it does not close again on the same song
+      const j = await (await fetch("https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-throne", { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ reopen: { id } }) })).json();
+      if (!j.ok) throw new Error(j.error || "failed");
+      const w = await wheelApi("GET"); D.prizes = w.prizes; D.spins = w.spins;
+    }
     else if (act.startsWith("st:")) await save({ status: act.slice(3) });
     else if (act === "mail") {
       if (!email) return alert("Add the winner's email address first.");

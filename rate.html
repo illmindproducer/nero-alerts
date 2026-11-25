@@ -28,6 +28,12 @@
   .now .sync span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .link { background: none; border: 0; color: var(--green); font: inherit; padding: 4px 0; white-space: nowrap; cursor: pointer; text-decoration: underline; }
 
+  .thr { margin-top: 10px; padding: 11px 12px; border-radius: 12px; border: 2px solid var(--orange); background: #1c1004; }
+  .thr.ok { border-color: var(--green); background: #071309; }
+  .thr b { display: block; font: 400 22px/1.1 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; letter-spacing: .05em; color: var(--orange); }
+  .thr.ok b { color: var(--green); }
+  .thr p { margin: 5px 0 0; font-size: 13px; line-height: 1.45; }
+  .thr .mini { margin-top: 8px; }
   .cat { margin-top: 8px; padding: 9px 10px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
   .cat .hd { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
   .cat .name { flex: 1; }
@@ -107,6 +113,7 @@
     <input id="artist" class="artist" placeholder="Artist" autocomplete="off">
     <div class="sync"><span id="neroLine">Nero: checking…</span><button class="link" id="pull">Pull from Nero</button></div>
   </div>
+  <div id="throneBox"></div>
   <div id="cats"></div>
   <div class="overall" id="ovBox">
     <div><small>OVERALL <span id="ovMode">(AVERAGE)</span></small><div class="big" id="ovNum">—</div><div class="tier" id="ovTier">—</div></div>
@@ -548,11 +555,43 @@ addEventListener("keydown", e => {
 try { $("autonext").checked = localStorage.getItem("rating_autonext") !== "0"; } catch (e) {}
 $("autonext").onchange = e => { try { localStorage.setItem("rating_autonext", e.target.checked ? "1" : "0"); } catch (x) {} };
 
+/* ---- free Throne passes: a wheel winner's next song is waiting in the queue. The feed finds it; this tells illmind to move it up.
+   Names and song titles come from the public, so everything is built with text nodes. ---- */
+const THRONE_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-throne";
+let throneSig = "";
+function drawThrone(list) {
+  const sig = JSON.stringify(list.map(t => [t.spin, t.sub, t.tier, t.pos, t.playing]));
+  if (sig === throneSig) return; throneSig = sig;
+  const box = $("throneBox"); box.textContent = "";
+  for (const t of list) {
+    const row = document.createElement("div"); row.className = "thr" + (t.bumped || t.playing ? " ok" : "");
+    const as = t.name && t.name.toLowerCase() !== String(t.winner || "").toLowerCase() ? " (submitted as " + t.name + ")" : "";
+    row.append(Object.assign(document.createElement("b"), { textContent: "\u{1F451} FREE THRONE: " + (t.winner || t.name) }));
+    const line = t.playing ? `"${t.song}" is playing now. Their free Throne is used and marked done.`
+      : t.bumped ? `"${t.song}"${as} is moved up (${String(t.tier).toUpperCase()}), number ${t.pos} in the queue. It closes itself when the song plays.`
+      : `"${t.song}"${as} is waiting at number ${t.pos} in the queue. Move it to Super Skip in Nero.`;
+    row.append(Object.assign(document.createElement("p"), { textContent: line }));
+    if (!t.playing) {
+      const no = Object.assign(document.createElement("button"), { className: "mini", textContent: "NOT THEM" }); let armed = 0;
+      no.onclick = async () => {
+        if (Date.now() - armed > 3000) { armed = Date.now(); no.textContent = "TAP AGAIN: THIS IS SOMEONE ELSE"; setTimeout(() => { if (no.isConnected) no.textContent = "NOT THEM"; }, 3000); return; }
+        no.disabled = true; no.textContent = "…";
+        try { const j = await (await fetch(THRONE_URL, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ ignore: { id: t.spin, sub: t.sub } }) })).json();
+          if (!j.ok) throw new Error(j.error || "failed"); row.remove(); }
+        catch (e) { no.disabled = false; no.textContent = "COULD NOT SAVE, TAP TO RETRY"; }
+      };
+      row.append(no);
+    }
+    box.append(row);
+  }
+}
+
 /* ---- watch Nero for the song changing ---- */
 async function watchNero() {
   try {
     const j = await (await fetch(FEED_URL + "?t=" + Date.now(), { cache: "no-store" })).json();
     const cur = j.live ? j.current : null;
+    try { drawThrone(Array.isArray(j.throne) ? j.throne : []); } catch (e) {}
     $("neroLine").textContent = cur ? `Nero: ${cur.song} — ${cur.name}` : "Nero: no song playing";
     const changed = cur && nero && cur.id !== nero.id;
     nero = cur;

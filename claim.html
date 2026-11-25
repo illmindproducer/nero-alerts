@@ -58,10 +58,10 @@ const F = {
   call: [["timezone", "Your time zone", "text", true], ["availability", "Days and times that work for you", "area", true]],
   membership: [["account_email", "Email for your club account <i>(if different from above)</i>", "email", false]],
   social: [["instagram", "Your Instagram handle", "text", true]],
-  submission: [["nero_email", "Email on your Nero account <i>(if different from above)</i>", "email", false]],
+  submission: [["nero_name", "Name you submit under on Nero <i>(if different from above)</i>", "text", false]],
 };
 const INTRO = { physical: "Tell us where to ship it.", digital: "Tell us where to send it.", call: "Tell us when you are free and we will set it up.", membership: "Tell us which email to set your membership up under.",
-  social: "Tell us your handle so the follow and shout out go to the right account.", submission: "Tell us which Nero account gets the free submission." };
+  social: "Tell us your handle so the follow and shout out go to the right account.", submission: "Your next track on the stream gets bumped to the front of the line. Just confirm the name you submit under." };
 /* Some prizes deliver themselves: once the form is in, the winner is shown the link (or instructions) right here. Built with text nodes only. */
 function showDeliver(text) {
   if (!text) return; const box = $("deliver"); box.textContent = "";
@@ -86,7 +86,7 @@ function field([key, label, type, req, half]) {
   sub.append("Congrats", j.winner ? ", " : "", Object.assign(document.createElement("b"), { textContent: j.winner || "" }), "! ", INTRO[j.kind] || "Fill this in to claim it.", j.claimed ? " You already sent your details; sending again replaces them." : "");
   const fields = [F.name, F.email, ...(F[j.kind] || [])].map(field); let html = "";
   for (let i = 0; i < fields.length; i++) { if (fields[i].half && fields[i + 1] && fields[i + 1].half) { html += `<div class="two">${fields[i].html}${fields[i + 1].html}</div>`; i++; } else html += fields[i].html; }
-  $("form").innerHTML = html + `<button type="submit">CLAIM MY PRIZE</button>`; $("form").style.display = "block"; $("fine").style.display = "block";
+  $("form").innerHTML = html + `<button type="submit">${j.kind === "submission" ? "CONFIRM" : "CLAIM MY PRIZE"}</button>`; $("form").style.display = "block"; $("fine").style.display = "block";
   $("form").elements.name.value = j.winner || "";
   $("form").onsubmit = async e => {
     e.preventDefault(); const form = e.target, data = {};
@@ -95,8 +95,8 @@ function field([key, label, type, req, half]) {
     const btn = form.querySelector("button"); btn.disabled = true; btn.textContent = "SENDING…"; say("");
     try { const r = await (await fetch(WHEEL_URL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ claim: { token: TOKEN, data } }) })).json();
       if (!r.ok) throw new Error(r.error || "It didn't go through.");
-      form.style.display = "none"; $("fine").style.display = "none"; $("sub").textContent = ""; say(r.deliver ? "Got it. Your prize is below, and it's on its way to your email too." : "Got it. Your details are in, and illmind will be in touch about your prize.", "ok"); showDeliver(r.deliver);
-    } catch (x) { btn.disabled = false; btn.textContent = "CLAIM MY PRIZE"; say(x.message + " Please try again.", "err"); }
+      form.style.display = "none"; $("fine").style.display = "none"; $("sub").textContent = ""; say(r.deliver ? "Got it. Your prize is below, and it's on its way to your email too." : j.kind === "submission" ? "Got it. The next time you submit a track on the stream under that name, it gets bumped to the front of the line." : "Got it. Your details are in, and illmind will be in touch about your prize.", "ok"); showDeliver(r.deliver);
+    } catch (x) { btn.disabled = false; btn.textContent = j.kind === "submission" ? "CONFIRM" : "CLAIM MY PRIZE"; say(x.message + " Please try again.", "err"); }
   };
 })();
 </script>

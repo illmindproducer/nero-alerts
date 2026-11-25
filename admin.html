@@ -236,6 +236,12 @@ function spinStage(s) {
     if (s.status === "fulfilled") return ["done", s.pass?.used ? "DONE · THRONE USED" : "DONE · PRIZE SENT"];
     if (s.status === "claimed" || s.status === "emailed") return ["wait", "PASS OPEN · FLAGS ITSELF WHEN THEY SUBMIT"];
   }
+  if (s.prize_kind === "membership") {            // the club sets itself up under the email on file and emails the winner; no form needed
+    if (s.status === "fulfilled") return ["done", s.comp_outcome === "comped" ? "DONE · MEMBERSHIP SET UP + EMAILED" : "DONE · PRIZE SENT"];
+    if (s.comp_outcome === "already_paying") return ["todo", "ALREADY A PAYING MEMBER · YOUR CALL"];
+    if (s.comp_outcome === "already_comped") return ["todo", "ALREADY HAS FREE ACCESS · YOUR CALL"];
+    return (s.claim?.account_email || s.claim?.email || s.email) ? ["wait", "SETTING UP MEMBERSHIP · AUTOMATIC, ABOUT 10 MIN"] : ["todo", "NEEDS AN EMAIL ADDRESS · THEN IT SETS ITSELF UP"];
+  }
   if (s.status === "fulfilled") return ["done", "DONE · PRIZE SENT"];
   if (s.status === "claimed") return ["todo", "DETAILS IN · SEND THE PRIZE"];
   if (s.status === "emailed") return ["wait", "EMAILED · WAITING ON WINNER"];

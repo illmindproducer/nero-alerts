@@ -353,17 +353,24 @@ async function spin(sp) {
    illmind gives the free illmind beat straight to someone: no wheel, no odds. The screen is taken over by a gold award
    (light rays, a spinning gold record, the prize slammed in, who it goes to), with every sound the jackpot has and more.
    About ten seconds later the old TV drops in and Chip Sterling's beat video plays, then everything leaves. */
-function awOff() {
-  if (!document.body.classList.contains("aw")) return;
-  document.body.classList.remove("aw"); const aw = $("aw");
-  const f = aw.animate([{ opacity: getComputedStyle(aw).opacity }, { opacity: 0 }], { duration: 380, easing: "ease-in" });
-  f.onfinish = () => { if (!document.body.classList.contains("aw")) aw.getAnimations({ subtree: true }).forEach(a => a.cancel()); };
+let awTimer = 0;
+function awOff() {                                           // must never depend on an animation "finished" event: in Streamlabs that did not clear the backdrop
+  const aw = $("aw"); clearTimeout(awTimer);
+  const was = document.body.classList.contains("aw"); document.body.classList.remove("aw");
+  aw.getAnimations({ subtree: true }).forEach(x => x.cancel());                               // everything drops back to its resting state, which is invisible
+  aw.getAnimations().forEach(x => x.cancel()); aw.querySelectorAll("*").forEach(n => n.getAnimations().forEach(x => x.cancel()));   // the same again, piece by piece, for browsers that ignore "subtree"
+  aw.style.opacity = "";
+  if (was) {                                                 // a soft exit for the backdrop, ended by a plain timer so it cannot get stuck on screen
+    const f = aw.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 380, easing: "ease-in" });
+    setTimeout(() => { try { f.cancel(); } catch (e) {} }, 450);
+  }
 }
 async function award(sp) {
   const my = ++runId; clearTimeout(hideTimer); busy = false; try { ac().resume(); } catch (e) {}
   live.forEach(s => { try { s.stop(); } catch (e) {} }); live.clear(); cf.until = 0; tvOff(true);
   const aw = $("aw"), q = sel => aw.querySelector(sel), pop = "cubic-bezier(.2,1.5,.3,1)";
-  aw.getAnimations({ subtree: true }).forEach(a => a.cancel());
+  awOff(); aw.getAnimations().forEach(x => x.cancel());
+  awTimer = setTimeout(() => { if (my === runId) hide(); }, 48000);   // a backstop: whatever happens, the award is off screen within 48 seconds
   if (shown) {                                               // the wheel steps aside
     shown = false; $("who").style.opacity = 0; document.body.classList.remove("won", "rare", "spin");
     A($("stage"), [{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(.6)" }], 300, { easing: "ease-in" });

@@ -245,29 +245,42 @@ let tvOn = false, pv = null;
    The sound is the clock: the frame shown is always the one for where the sound has got to, so they cannot drift.
    Files: prize/f/NAME_00.jpg … NAME_12.jpg and prize/f/NAME.webm, cut from prize/NAME.webm (see memory for the command). */
 const FPS = 15, FW = 480, FH = 402, PER = 25, COLS = 5, FRAMES = 301, PVER = 5;   // bump PVER when the files change, so nobody gets a stale copy
-function dropVideo(p) { if (!p) return; p.dead = true; try { p.a.onended = p.a.onerror = null; p.a.pause(); p.a.removeAttribute("src"); p.a.load(); } catch (e) {} }
+function dropVideo(p) { if (!p) return; p.dead = true; clearInterval(p.timer); try { p.a.onended = p.a.onerror = null; p.a.pause(); p.a.removeAttribute("src"); p.a.load(); } catch (e) {} }
 function newVideo(name) {
   const old = pv, a = new Audio(); a.preload = "auto"; a.src = `prize/f/${name}.webm?v=${PVER}`; a.load();
-  const sheets = []; for (let i = 0; i < Math.ceil(FRAMES / PER); i++) { const im = new Image(); im.src = `prize/f/${name}_${String(i).padStart(2, "0")}.jpg?v=${PVER}`; sheets.push(im); }
+  const sheets = []; for (let i = 0; i < Math.ceil(FRAMES / PER); i++) { const im = new Image(), u = `prize/f/${name}_${String(i).padStart(2, "0")}.jpg?v=${PVER}`; im.onerror = () => { if (im.again) return; im.again = 1; setTimeout(() => { im.src = u + "&r=1"; }, 600); }; im.src = u; sheets.push(im); }
   const can = $("tvCan"); can.width = FW; can.height = FH; can.getContext("2d").clearRect(0, 0, FW, FH);   // never show the last prize's final frame
-  pv = { name, a, sheets, dead: false, clock: 0 }; dropVideo(old); return pv;
+  pv = { name, a, sheets, dead: false, t0: 0, heard: false, timer: 0 }; dropVideo(old); return pv;
 }
+/* The painter must not depend on anything that has failed inside Streamlabs: it runs on a plain timer (not on animation
+   frames), it starts whether or not the sound has, and it keeps its own clock. While the sound is really moving, the sound
+   is the clock (so they cannot drift); if the sound never starts or stalls at zero, the picture plays on by the wall clock. */
 function tvFrames(p, my) {
-  const ctx = $("tvCan").getContext("2d"); let last = -1;
-  (function frame() {
-    if (my !== runId || pv !== p || p.dead || !tvOn) return;
-    const t = p.clock ? (performance.now() - p.clock) / 1000 : p.a.currentTime;      // p.clock is only set when the sound could not start
-    const i = Math.min(FRAMES - 1, Math.max(0, Math.floor(t * FPS)));
-    if (i !== last) { const im = p.sheets[Math.floor(i / PER)], k = i % PER;
-      if (im.complete && im.naturalWidth) { ctx.drawImage(im, (k % COLS) * FW, Math.floor(k / COLS) * FH, FW, FH, 0, 0, FW, FH); last = i; } }
-    requestAnimationFrame(frame);
-  })();
+  const ctx = $("tvCan").getContext("2d"); let last = -1; clearInterval(p.timer);
+  const stop = () => clearInterval(p.timer);
+  p.timer = setInterval(() => {
+    if (my !== runId || pv !== p || p.dead || !tvOn) return stop();
+    try {
+      const wall = (performance.now() - p.t0) / 1000, at = p.a.currentTime || 0;
+      if (at > 0.05) p.heard = true;
+      const t = p.heard ? at : Math.max(0, wall - 0.7);                              // the sound gets 0.7s to start before the picture goes on alone
+      const i = Math.min(FRAMES - 1, Math.max(0, Math.floor(t * FPS)));
+      if (i === last) return;
+      let im = p.sheets[Math.floor(i / PER)], k = i % PER;
+      if (!(im.complete && im.naturalWidth)) return;                                  // that sheet has not arrived: hold the frame already showing
+      ctx.drawImage(im, (k % COLS) * FW, Math.floor(k / COLS) * FH, FW, FH, 0, 0, FW, FH); last = i;
+    } catch (e) {}
+  }, 33);
 }
-function resetPic() { const pic = $("tvPic"); pic.getAnimations().forEach(a => a.cancel()); pic.style.transform = ""; }
-function tvOff(fast) {                                         // picture collapses to a line, then the set leaves
+function resetPic() {                                          // the picture must be full size: cancel anything left on it, then pin it there with a newer animation as well
+  const pic = $("tvPic"); try { pic.getAnimations().forEach(a => a.cancel()); } catch (e) {}
+  pic.style.transform = "none"; pic.style.opacity = 1;
+  pic.animate([{ transform: "none" }, { transform: "none" }], { duration: 1, fill: "forwards" });
+}
+function tvOff(fast) {                                         // picture collapses to a line, then the set leaves. The collapse holds until the set has faded (580ms) and then lets go by itself, so nothing is left on the screen for the next video
   try { pv && pv.a.pause(); } catch (e) {}
   if (!tvOn) return; tvOn = false;
-  if (!fast) { A($("tvPic"), [{ transform: "scale(1, 1)" }, { transform: "scale(1, .02)", offset: 0.6 }, { transform: "scale(0, .02)" }], 260, { easing: "ease-in" }); const t = ac().currentTime; tone(200, t, 0.18, "sine", 0.2, 60); }
+  if (!fast) { $("tvPic").animate([{ transform: "scale(1, 1)" }, { transform: "scale(1, .02)", offset: 0.24 }, { transform: "scale(0, .02)", offset: 0.4 }, { transform: "scale(0, .02)" }], { duration: 660, fill: "none", easing: "linear" }); const t = ac().currentTime; tone(200, t, 0.18, "sine", 0.2, 60); }
   A($("tv"), [{ opacity: 1, transform: "translate(-50%, -50%) scale(1)" }, { opacity: 0, transform: "translate(-50%, -50%) scale(.3)" }], 300, { delay: fast ? 0 : 280, easing: "ease-in" });
 }
 async function playTv(src, my, awardCard) {               // awardCard: the FREE BEAT AWARD text, which leaves instead of the wheel's winner card (its gold backdrop stays behind the TV)
@@ -283,11 +296,10 @@ async function playTv(src, my, awardCard) {               // awardCard: the FREE
   await wait(620); if (my !== runId) return;
   const vol = Math.min(1, VOL * 1.4);                        // the files themselves are mastered loud; this is full volume unless ?vol= is turned down
   let finish; const done = new Promise(res => { finish = res; setTimeout(res, 24000); });
-  const silent = () => { if (p.clock) return; p.clock = performance.now(); setTimeout(finish, 20500); };   // no sound (an ordinary browser may refuse it until clicked): the picture runs on its own clock
-  const a = p.a; a.volume = vol; a.muted = false; a.onended = finish; a.onerror = silent;
-  try { await a.play(); } catch (e) { silent(); }
-  if (my !== runId) return;
-  tvFrames(p, my);
+  const a = p.a; a.onended = finish; a.onerror = null;
+  setTimeout(() => { if (!p.heard) finish(); }, 21400);      // no sound at all: the picture ran on its own clock and is over
+  p.t0 = performance.now(); p.heard = false; tvFrames(p, my);   // the picture starts now, whatever the sound does
+  try { a.volume = vol; a.muted = false; const pr = a.play(); if (pr && pr.catch) pr.catch(() => {}); } catch (e) {}   // never waited on: an ordinary browser may refuse sound until the page is clicked
   await done; if (my !== runId) return;
   tvOff(false); await wait(650); if (my !== runId) return;
   hide();

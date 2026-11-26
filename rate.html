@@ -654,6 +654,21 @@ async function vcSecond(blob, quote) {                 // the brain's careful se
   try { return await (await fetch(CHECK_URL, { method: "POST", headers: { "content-type": bud.mime.split(";")[0], "x-rating-key": KEY, "x-quote": btoa(unescape(encodeURIComponent(String(quote || "").slice(0, 160)))) }, body: blob })).json(); }
   catch (e) { return null; }
 }
+/* "Ape, next one": Nero has no outside way to move its queue, so the press happens in illmind's own browser. This raises a signal
+   (nero-next); the small Chrome add-on on his open Nero live tab sees it and clicks Nero's own Next button, then answers.
+   If no tab answers, Ape says so and nothing else happens. Never twice within 15 seconds. */
+const NEXT_URL = "https://zlujvgqnvrhxrhkefgqr.supabase.co/functions/v1/nero-next";
+async function vcNext(pct) {
+  if (Date.now() - (VC.nextAt || 0) < 15000) { vcLog("Ignored a second next within 15 seconds."); return false; }
+  VC.nextAt = Date.now();
+  let j = null;
+  try { j = await (await fetch(NEXT_URL, { method: "POST", headers: { "content-type": "application/json", "x-rating-key": KEY }, body: JSON.stringify({ next: true }) })).json(); } catch (e) {}
+  if (j && j.ok && j.pressed === true) { vcLog("Pressed Next on Nero" + pct + "."); return true; }
+  VC.nextAt = 0;
+  vcLog("Could not press Next: " + (!j || !j.ok ? "the signal did not go through" : j.why || "no answer") + ".");
+  await vcSayLine(j && j.ok && j.pressed === false ? "Nero would not take it. That one is still your button." : "I can't reach your Nero tab. That one is still your button.");
+  return false;
+}
 async function vcBeat(c, pct) {                        // the free beat by voice: ALWAYS a spoken yes first, whatever the voice match
   const who = $("artist").value.trim();
   if (!who) { vcLog("Nobody in NOW PLAYING to give the beat to."); return false; }
@@ -734,6 +749,7 @@ async function vcHandle(j, blob) {
   if (now - VC.last < 2000 || (!repeatable && c.action === VC.lastAct && now - VC.lastActAt < 8000)) return false;   // one thing at a time, and never the same thing twice in a row
   VC.last = now; VC.lastAct = c.action; VC.lastActAt = now;
   if (c.action === "wheel_spin") return vcSpin(j, c, blob, vp, pct);
+  if (c.action === "next_song") return vcNext(pct);
   const did = vcDo(c);
   if (did === null) { vcLog("Could not do" + q + "."); return false; }
   vcLog(did + pct); return c.action !== "shut_up" && c.action !== "ears_off";

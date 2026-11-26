@@ -163,6 +163,7 @@
     <div class="vol" style="margin-top:14px">LIVE CHAT <span id="chatInfo" style="margin-left:auto">OFF</span></div>
     <button class="big" id="chatBtn" style="margin-top:6px">TURN CHAT REPLIES ON</button>
     <div class="vol">ANSWERS <input type="range" id="chatDial" min="1" max="10" value="9"> <span id="chatDialN">9</span></div>
+    <button class="mini" id="holdBtn" style="width:100%;margin-top:6px">HOLD WHILE I TALK ON</button>
     <div class="two"><button class="mini" id="budTest">TEST VOICE</button><button class="mini shut" id="budShut">SHUT UP</button></div>
     <div class="meter"><i id="budLevel"></i></div>
     <div id="budLog">Ears are off. Turn them on from the device whose microphone is in the room with your speakers.</div>
@@ -789,7 +790,7 @@ const CHAT_BOTS = /^(nightbot|streamelements|streamlabs|moobot|fossabot|wizebot|
 const chat = { on: false, gen: 0, first: true, seen: new Set(), q: [], plat: {}, ctls: new Set(), busy: false, last: 0, got: 0, said: 0, timer: 0 };
 function chatInfo(note) {
   const up = Object.entries(chat.plat).filter(([, st]) => st === "connected").map(([p]) => p.toUpperCase());
-  $("chatInfo").textContent = !chat.on ? "OFF" : note || ((up.length ? up.join(" + ") : "WAITING FOR CHAT") + (chat.got ? " · " + chat.got + " comments, " + chat.said + " replies" : ""));
+  $("chatInfo").textContent = !chat.on ? "OFF" : note || (chat.hold ? "HOLDING · YOU ARE TALKING" : (up.length ? up.join(" + ") : "WAITING FOR CHAT") + (chat.got ? " · " + chat.got + " comments, " + chat.said + " replies" : ""));
 }
 function chatTake(m, old) {
   if (!m || !m.id || chat.seen.has(m.id)) return; chat.seen.add(m.id);
@@ -828,6 +829,51 @@ function chatConn(gen, fails) {
     setTimeout(() => spawn(f), got ? 300 : Math.min(15000, 1500 * f));
   })();
 }
+/* HOLD WHILE I TALK: chat replies wait for illmind to stop talking. The microphone level is watched 10 times a second
+   (the ears' microphone when ears are on; otherwise a level-only microphone that records nothing and sends nothing).
+   Sound with gaps in it is taken as him talking. Sound with almost no gaps for 4 seconds is taken as a song, which does
+   not hold replies. Ape's own lines are ignored. A reply is only asked for, and only spoken, after QUIET_MS of quiet. */
+const QUIET_MS = 2000, HOLD_MAX = 20000;
+const hush = { on: true, voice: 0, win: [], music: false, stream: null, ctx: null, an: null, opening: false, failed: false, timer: 0, buf: null };
+try { hush.on = localStorage.getItem("chat_hold") !== "0"; } catch (e) {}
+const hushTalking = () => hush.on && Date.now() - hush.voice < QUIET_MS;
+function hushDraw() { const b = $("holdBtn"); b.classList.toggle("sel", hush.on); b.textContent = "HOLD WHILE I TALK " + (hush.on ? "ON" : "OFF"); }
+function hushClose() {
+  if (hush.stream) hush.stream.getTracks().forEach(t => t.stop()); if (hush.ctx) hush.ctx.close().catch(() => {});
+  hush.stream = hush.ctx = hush.an = null; if (!bud.on) $("budLevel").style.transform = "scaleX(0)";
+}
+async function hushOpen() {
+  if (hush.opening || hush.failed) return; hush.opening = true;
+  try {
+    const st = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+    if (!chat.on || !hush.on || bud.on) { st.getTracks().forEach(t => t.stop()); return; }
+    const ctx = new (window.AudioContext || window.webkitAudioContext)(), an = ctx.createAnalyser(); an.fftSize = 2048;
+    const g = ctx.createGain(); g.gain.value = +$("budGain").value;               // same boost and compressor as the ears, so the same level counts
+    const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 8; comp.attack.value = 0.005; comp.release.value = 0.2;
+    ctx.createMediaStreamSource(st).connect(g); g.connect(comp); comp.connect(an);
+    hush.stream = st; hush.ctx = ctx; hush.an = an;
+  } catch (e) { hush.failed = true; budLog("ERROR", "Cannot hear the room (" + (e.message || e) + "), so chat replies will not hold while you talk."); }
+  finally { hush.opening = false; }
+}
+function hushTick() {
+  const want = chat.on && hush.on;
+  if (!want || bud.on) { if (hush.stream) hushClose(); } else if (!hush.an) hushOpen();
+  if (!want) { hush.win = []; hush.music = false; hush.voice = 0; return; }
+  const an = bud.on ? bud.an : hush.an; if (!an) return;
+  const now = Date.now();
+  if (now < bud.speakingUntil + 400) return;                                     // that is Ape, not him
+  if (!hush.buf || hush.buf.length !== an.fftSize) hush.buf = new Float32Array(an.fftSize);
+  an.getFloatTimeDomainData(hush.buf);
+  let s = 0; for (let i = 0; i < hush.buf.length; i++) s += hush.buf[i] * hush.buf[i]; const rms = Math.sqrt(s / hush.buf.length), loud = rms > LOUD;
+  if (!bud.on) { $("budLevel").style.transform = `scaleX(${Math.min(1, rms * 5)})`; $("budLevel").style.background = loud ? "var(--green)" : "var(--dim)"; }
+  hush.win.push(loud ? 1 : 0); if (hush.win.length > 40) hush.win.shift();
+  hush.music = hush.win.length >= 40 && hush.win.reduce((a, b) => a + b, 0) >= 38;   // a song has almost no gaps; talking does
+  if (loud && !hush.music) hush.voice = now;
+}
+$("holdBtn").onclick = () => { hush.on = !hush.on; hush.failed = false; try { localStorage.setItem("chat_hold", hush.on ? "1" : "0"); } catch (e) {} hushDraw(); };
+hushDraw(); setInterval(hushTick, 100);
+
+function chatHold(h) { if (!!h === !!chat.hold) return; chat.hold = !!h; chatInfo(); }
 async function chatAnswer(batch) {
   chat.busy = true; bud.inflight++; if (Date.now() > bud.speakingUntil) budSay("READING CHAT");
   try {
@@ -837,8 +883,12 @@ async function chatAnswer(batch) {
     if (!j.ok) { budLog("ERROR", j.error === "daily_cap" ? "Daily limit reached. Chat replies are off until tomorrow." : j.error); if (j.error === "daily_cap") chatStop(); return; }
     if (!j.url && j.voice_error) budLog("ERROR", "Had a reply for chat but no voice was available: " + j.voice_error);
     if (j.url && chat.on) {
-      for (let i = 0; i < 40 && Date.now() < bud.speakingUntil; i++) await new Promise(r => setTimeout(r, 300));   // let a line already being spoken finish
-      if (chat.on) { await budSpeak(j); chat.said++; }
+      const t0 = Date.now();                             // let a line already being spoken finish, and let him finish his sentence
+      while (chat.on && (Date.now() < bud.speakingUntil || hushTalking()) && Date.now() - t0 < HOLD_MAX) { chatHold(hushTalking()); await new Promise(r => setTimeout(r, 200)); }
+      if (chat.on && hushTalking()) {                    // he never stopped: ask again later, but only once more per comment
+        const again = batch.filter(m => !m.tried); again.forEach(m => m.tried = true); chat.q.unshift(...again);
+        budLog("", "Held a chat reply: you were still talking." + (again.length ? " It will try again when you stop." : "")); }
+      else if (chat.on) { await budSpeak(j); chat.said++; }
     }
   } catch (e) { budLog("ERROR", String(e.message || e)); }
   finally { chat.busy = false; bud.inflight--; chat.last = Date.now(); chatInfo(); }
@@ -847,9 +897,12 @@ function chatTick() {
   if (!chat.on) return; const now = Date.now();
   chat.q = chat.q.filter(m => now - m.at < 90000);                              // a comment older than a minute and a half is old news
   if (!chat.busy && now > bud.speakingUntil && !bud.on && $("budStatus").textContent !== "CHAT") budSay("CHAT", "air");
+  if (!chat.busy && (!chat.q.length || !hushTalking())) chatHold(false);
   if (chat.busy || !chat.q.length || bud.inflight >= 2) return;
   const gap = (10 - +$("chatDial").value) * 4000 + 1500;
   if (now < bud.speakingUntil + 800 || now - chat.last < gap) return;
+  if (hushTalking()) return chatHold(true);                                     // he is talking: do not even ask for a reply yet
+  chatHold(false);
   chatAnswer(chat.q.splice(0, 4));                                              // up to four at a time; he answers the best of them
 }
 function chatStart() {
@@ -859,7 +912,7 @@ function chatStart() {
   chatConn(chat.gen, 0); clearInterval(chat.timer); chat.timer = setInterval(chatTick, 700);
 }
 function chatStop() {
-  chat.on = false; chat.gen++; clearInterval(chat.timer); chat.ctls.forEach(c => { try { c.abort(); } catch (e) {} }); chat.ctls.clear(); chat.q = [];
+  chat.on = false; chat.hold = false; chat.gen++; clearInterval(chat.timer); chat.ctls.forEach(c => { try { c.abort(); } catch (e) {} }); chat.ctls.clear(); chat.q = [];
   $("chatBtn").classList.remove("on"); $("chatBtn").textContent = "TURN CHAT REPLIES ON"; chatInfo(); if (!bud.on) budSay("OFF");
 }
 $("chatBtn").onclick = () => chat.on ? chatStop() : chatStart();
